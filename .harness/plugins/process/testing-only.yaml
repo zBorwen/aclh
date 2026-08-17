@@ -1,0 +1,29 @@
+plugin:
+  name: testing-only
+  type: process
+  version: 1.0.0
+  description: 轻量级仅测试工作流 (Lightweight Process for Just Adding Tests)
+  tags:
+    - process
+    - testing
+    - lightweight
+
+workflow:
+  steps:
+    - name: ANALYZE
+      action: find uncovered code paths, branches, edge cases # 分析并找出未覆盖的代码路径、分支和边界情况
+    - name: WRITE
+      action: write tests for gaps # 为代码覆盖空白编写测试
+      constraints: MUST NOT modify source code # 绝对不允许修改业务源码
+    - name: VERIFY
+      action: run coverage report, confirm improvement # 运行覆盖率报告，确认指标有所提升
+
+  constraints:
+    - no source code changes # 禁止修改源码
+    - no weakening existing assertions # 禁止削弱现有的断言验证
+    - clear describe/it structure # 测试用例必须具有清晰的 describe/it 结构描述
+
+  coverage_targets:
+    statements: 80% # 语句覆盖率目标
+    branches: 70% # 分支覆盖率目标
+    functions: 80% # 函数覆盖率目标

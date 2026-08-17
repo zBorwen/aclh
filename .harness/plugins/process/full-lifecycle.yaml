@@ -1,0 +1,59 @@
+plugin:
+  name: full-lifecycle
+  type: process
+  version: 1.0.0
+  description: 完整软件生命周期 (Full Lifecycle Phases from Requirements to Delivery)
+  tags:
+    - process
+    - lifecycle
+    - management
+
+workflow:
+  phases:
+    - name: requirements
+      description: 需求阶段 (Requirements Phase)
+      entry: jira ticket exists # 进入条件：存在 Jira 工单
+      constraints:
+        - must have acceptance criteria # 约束条件：必须包含验收标准
+      exit: spec.md completed # 退出条件：完成需求规格说明书 (spec.md)
+
+    - name: design
+      description: 设计阶段 (Design Phase)
+      entry: spec approved # 进入条件：需求规格已批准
+      constraints:
+        - figma/design reference linked # 约束条件：必须关联 Figma 或设计参考链接
+      exit: component breakdown done # 退出条件：完成组件拆解
+
+    - name: task
+      description: 任务拆解阶段 (Task Breakdown Phase)
+      entry: design approved # 进入条件：设计方案已批准
+      constraints:
+        - TDD first - tests before impl notes # 必须遵循测试先行：在编写实现笔记前先规划测试
+        - max scope medium # 单个任务范围最大为 medium
+        - impact analysis required # 必须进行影响面分析
+      exit: all tasks have tests, impact analyzed # 退出条件：所有任务都有测试计划，且已分析影响
+
+    - name: implement
+      description: 实现阶段 (Implementation Phase)
+      entry: tasks broken down with tests # 进入条件：任务已拆解且包含测试计划
+      constraints:
+        - follow tdd-workflow plugin # 必须严格遵守 TDD 工作流插件
+        - check knowledge base # 编码前检查知识库
+      exit: all tests pass, lint pass, changelog updated # 退出条件：所有测试通过，代码检查通过，更新变更日志
+
+    - name: testing
+      description: 测试阶段 (Testing Phase)
+      entry: implementation complete # 进入条件：功能实现完成
+      constraints:
+        - coverage >= threshold # 测试覆盖率必须达标
+        - edge cases covered # 必须覆盖边界情况
+      exit: all tests green, human review passed # 退出条件：测试全绿，通过人工审查
+
+    - name: delivery
+      description: 交付阶段 (Delivery Phase)
+      entry: testing complete # 进入条件：测试完全通过
+      constraints:
+        - PR checklist done # 完成 PR 检查清单
+        - docs updated # 相关文档已更新
+        - bug-ledger updated if applicable # 若有遗留或相关缺陷，需更新缺陷账本
+      exit: PR merged, task cleaned up # 退出条件：PR 成功合并，清理相关任务板

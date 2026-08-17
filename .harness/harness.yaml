@@ -1,0 +1,55 @@
+version: "1.0"
+
+# Preset support
+preset: "full-lifecycle"
+
+# Manual plugin composition (if `plugins:` is specified, it overrides the preset entirely)
+plugins:
+  rules:
+    - naming-frontend
+    - react-patterns
+    - typescript-strict
+  process:
+    - tdd-workflow
+    - full-lifecycle
+    - pr-review
+  templates:
+    - task-tdd # -> task-tdd.md
+    - bug-entry # -> bug-entry.md
+    - spec # -> spec.md
+
+# Project data (project assets, always loaded)
+project:
+  profile: true
+  architecture: true
+  dev-notes: true
+  bug-ledger: true
+  decisions: true
+  gotchas: true
+
+# Preset definitions
+presets:
+  full-lifecycle:
+    description: "正式业务项目开发（需求→交付）"
+    rules: [naming-frontend, react-patterns, typescript-strict]
+    process: [tdd-workflow, full-lifecycle, pr-review]
+    templates: [task-tdd, bug-entry, spec]
+    project: [profile, architecture, dev-notes, bug-ledger, decisions, gotchas]
+  testing-only:
+    description: "老项目补测试、提升 Sonar 分数"
+    rules: [typescript-strict]
+    process: [testing-only]
+    templates: [task-tdd]
+    project: [profile, architecture, gotchas]
+  maintenance:
+    description: "长期维护、Bug 修复"
+    rules: [naming-frontend, typescript-strict]
+    process: [pr-review]
+    templates: [bug-entry]
+    project: [profile, bug-ledger, gotchas, dev-notes]
+  quick-start:
+    description: "新项目初始化，最小配置"
+    rules: [naming-frontend]
+    process: []
+    templates: []
+    project: [profile]

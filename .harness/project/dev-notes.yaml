@@ -1,0 +1,12 @@
+# 开发笔记: 记录开发过程中的临时记录、环境问题、工具配置等
+# description: 记录日常开发中的重要发现或问题记录，防止知识流失
+entries:
+  # 示例记录:
+  # - id: "DN-001"
+  #   date: "2023-10-25"
+  #   category: "environment" # environment | framework | tooling | migration | performance
+  #   title: "本地 Node 版本冲突导致 node-sass 安装失败"
+  #   content: "使用 nvm 切换到 v14 后解决，项目需要 v14"
+  #   status: "completed" # in_progress | completed | abandoned
+  #   applies_to: ["global"]
+  []

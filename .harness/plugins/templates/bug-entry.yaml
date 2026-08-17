@@ -1,0 +1,14 @@
+id: "BUG-"
+date: ""
+source: ""  # tdd | human_review | ci | production
+task: ""
+module: ""
+severity: ""  # low | medium | high | critical
+symptom: ""
+error_signature: ""
+root_cause: ""
+resolution: ""
+prevention_rule: ""
+affected_files: []
+test_added: ""
+lesson: ""

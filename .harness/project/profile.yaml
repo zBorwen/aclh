@@ -1,0 +1,34 @@
+# 项目基本信息配置模板
+project:
+  name: ""          # 项目名称
+  description: ""   # 项目描述
+  repo: ""          # 代码仓库地址
+  type: ""          # frontend | backend | fullstack
+  maturity: ""      # new | existing
+
+tech_stack:
+  language: ""        # 编程语言 (如: TypeScript)
+  framework: ""       # 核心框架 (如: React, NestJS)
+  build_tool: ""      # 构建工具 (如: Vite, Webpack)
+  state_management: "" # 状态管理 (如: Redux, Zustand)
+  styling: ""         # 样式方案 (如: TailwindCSS, CSS Modules)
+  testing: ""         # 测试框架 (如: Jest, Vitest)
+  linting: ""         # 代码规范检查工具 (如: ESLint)
+  package_manager: "" # 包管理器 (如: pnpm, yarn, npm)
+  node_version: ""    # Node.js 版本要求 (如: >=18.0.0)
+
+deployment:
+  platform: ""        # 部署平台 (如: Vercel, AWS)
+  environments:
+    dev: ""           # 开发环境 URL
+    staging: ""       # 预发环境 URL
+    production: ""    # 生产环境 URL
+
+commands:
+  install: ""         # 安装依赖命令
+  dev: ""             # 本地开发命令
+  build: ""           # 生产构建命令
+  test: ""            # 运行测试命令
+  test_coverage: ""   # 运行测试覆盖率命令
+  lint: ""            # 代码规范检查命令
+  format: ""          # 代码格式化命令
