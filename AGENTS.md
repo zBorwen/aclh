@@ -1,4 +1,4 @@
-# AGENTS.md — AI Agent Context & Coding Constraints (AI Coding Lifecycle Harness, ACLH)
+# AGENTS.md — AI Agent Context & Coding Constraints
 
 > This document is the **highest-priority constraint** for all AI agents working in this repository. Any action that violates this document is a violation, even if tests pass.
 
