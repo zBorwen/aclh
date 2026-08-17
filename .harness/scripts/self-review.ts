@@ -53,7 +53,7 @@ const WIP: string = path.join(ROOT, 'docs/wip');
 
 const README_LINK = path.join(ROOT, 'AGENTS.md');
 const REQUIRED_FILES: string[] = ['spec.md', 'tasks.md', 'test-plan.md', 'changelog.md', '.state.yaml'];
-const VALID_PHASES: string[] = ['requirements', 'design', 'implementation', 'testing', 'review', 'complete'];
+const VALID_PHASES: string[] = ['requirements', 'design', 'task', 'implement', 'testing', 'delivery'];
 const VALID_STATUSES: string[] = ['active', 'paused', 'blocked'];
 const MIN_REVIEW_ROUNDS: number = 1;
 

@@ -1,4 +1,4 @@
-phase: "requirements" # requirements | design | implementation | testing | review | complete
+phase: "requirements" # requirements | design | task | implement | testing | delivery
 status: "active"      # active | paused | blocked
 review_history:
   - round: 1

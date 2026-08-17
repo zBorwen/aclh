@@ -53,8 +53,13 @@ for (const t of templates) {
   createdFiles.push(t.dest);
 }
 
-// Create test-plan.md
-fs.writeFileSync(path.join(taskDir, 'test-plan.md'), '# Test Plan\n\n');
+// Copy test-plan.md from template
+const testPlanSrc = path.join(HARNESS_DIR, 'plugins/templates', 'test-plan.md');
+if (fs.existsSync(testPlanSrc)) {
+  fs.copyFileSync(testPlanSrc, path.join(taskDir, 'test-plan.md'));
+} else {
+  fs.writeFileSync(path.join(taskDir, 'test-plan.md'), '# Test Plan\n\n');
+}
 createdFiles.push('test-plan.md');
 
 // Create changelog.md
