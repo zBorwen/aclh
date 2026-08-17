@@ -2189,14 +2189,14 @@
       "updated": 1,
       "link": null,
       "locked": false,
-      "text": "• 运行 node .harness/scripts/check.mjs (文件名、Grep 正则、禁例)",
+      "text": "• 运行 node .harness/scripts/check.ts (文件名、Grep 正则、禁例)",
       "fontSize": 12,
       "fontFamily": 1,
       "textAlign": "left",
       "verticalAlign": "top",
       "baseline": 12,
       "containerId": null,
-      "originalText": "• 运行 node .harness/scripts/check.mjs (文件名、Grep 正则、禁例)",
+      "originalText": "• 运行 node .harness/scripts/check.ts (文件名、Grep 正则、禁例)",
       "lineHeight": 1.3
     },
     {

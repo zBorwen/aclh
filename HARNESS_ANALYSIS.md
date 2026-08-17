@@ -35,7 +35,7 @@
 └────────────────────────────────────┬────────────────────────────────────┘
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ 5. 运行时任务空间 (docs/wip/) 与自动化质量门禁 (check.mjs / pre-commit)  │
+│ 5. 运行时任务空间 (docs/wip/) 与自动化质量门禁 (check.ts / pre-commit)  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -79,12 +79,12 @@
 - **`dev-notes.yaml`**：开发备忘录，沉淀环境兼容性问题、工具链配置等临时发现。
 
 ### 2.5 运行时空间与自动化质量门禁
-- **任务隔离空间 (`docs/wip/<TASK_ID>/`)**：通过 `node .harness/scripts/init-task.mjs <TASK_ID>` 一键初始化独立任务目录，利用 `.state.yaml` 跟踪任务阶段与审查历史。
-- **自动化守门引擎 (`.harness/scripts/check.mjs`)**：
+- **任务隔离空间 (`docs/wip/<TASK_ID>/`)**：通过 `node .harness/scripts/init-task.ts <TASK_ID>` 一键初始化独立任务目录，利用 `.state.yaml` 跟踪任务阶段与审查历史。
+- **自动化守门引擎 (`.harness/scripts/check.ts`)**：
   - 自动解析 `harness.yaml` 并执行激活插件中的 `checks`。
   - 支持 `filename-pattern`（文件名正则）、`grep-pattern`（代码反模式扫描）、`file-exists`（关键文件存在性）以及 `eslint-delegate`（ESLint 规则委托）。
 - **物理提交拦截器 (`.harness/hooks/pre-commit.sh`)**：
-  - Git Pre-commit 钩子，强制串联：`check.mjs` -> `npm run lint` -> `npm test`，任何一步失败则直接中止 Commit。
+  - Git Pre-commit 钩子，强制串联：`check.ts` -> `npm run lint` -> `npm test`，任何一步失败则直接中止 Commit。
 
 ---
 
@@ -116,7 +116,7 @@ ACLH 的灵魂在于 **内环 (Inner Loop)** 与 **外环 (Outer Loop)** 的协�
   │   Step 1: RED (编写失败测试，验证由于功能缺失而挂掉)               │
   │   Step 2: GREEN (编写最简实现，禁止篡改测试)                      │
   │   Step 3: REFACTOR (重构优化，保持测试全绿且数量不减)             │
-  │   Step 4: 机器自动验证 (check.mjs + Lint + Unit Test)             │
+  │   Step 4: 机器自动验证 (check.ts + Lint + Unit Test)             │
   └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -126,7 +126,7 @@ ACLH 的灵魂在于 **内环 (Inner Loop)** 与 **外环 (Outer Loop)** 的协�
   1. **禁止跳过 RED 阶段**：必须先写出因功能缺失而挂掉的测试。
   2. **禁止篡改既有测试**：不能为了让测试通过去弱化断言。
   3. **重构测试数量守恒**：重构后测试数量不得减少。
-  4. **静态门禁自检**：运行 `check.mjs`，确保无文件名违规、无 `console.log` 等违禁代码。
+  4. **静态门禁自检**：运行 `check.ts`，确保无文件名违规、无 `console.log` 等违禁代码。
 
 ### 3.2 外环 (Outer Loop) —— 人类在环与知识飞轮 (Knowledge Flywheel)
 - 目标：人类工程师把控高阶设计、业务逻辑与架构演进，并将审阅成果转化为系统记忆。
@@ -139,7 +139,7 @@ ACLH 的灵魂在于 **内环 (Inner Loop)** 与 **外环 (Outer Loop)** 的协�
 
 ## 4. 配套 Excalidraw 可视化图表
 
-为方便直观展示与分享，本设计已在 `docs/diagrams/` 目录下生成了 **5 套**高精度、全量元素对齐的 Excalidraw 架构设计图（由 `.harness/scripts/generate-excalidraw.mjs` 一键再生）：
+为方便直观展示与分享，本设计已在 `docs/diagrams/` 目录下生成了 **5 套**高精度、全量元素对齐的 Excalidraw 架构设计图（当前为静态产物）：
 
 | 序号 | 图表文件名 | 核心内容 |
 |---|---|---|
@@ -147,7 +147,7 @@ ACLH 的灵魂在于 **内环 (Inner Loop)** 与 **外环 (Outer Loop)** 的协�
 | **02** | [`02-aclh-dual-loop-workflow.excalidraw`](file:///Users/hylas/Desktop/ai-coding-lifecycle-harness/docs/diagrams/02-aclh-dual-loop-workflow.excalidraw) | **双环验证机制与全生命周期工作流图**：展示六阶段状态机流水线、内环 TDD 步骤门禁、外环人工审查、6 步反馈转化协议及 Bug Ledger 回流闭环。 |
 | **03** | [`03-aclh-context-knowledge-flywheel.excalidraw`](file:///Users/hylas/Desktop/ai-coding-lifecycle-harness/docs/diagrams/03-aclh-context-knowledge-flywheel.excalidraw) | **AI 上下文加载协议与知识飞轮数据流图**：展示严格的 0→5 阅读顺序流水线与历史经验自进化的知识飞轮数据流动。 |
 | **04** | [`04-aclh-plugin-preset-composition.excalidraw`](file:///Users/hylas/Desktop/ai-coding-lifecycle-harness/docs/diagrams/04-aclh-plugin-preset-composition.excalidraw) | **插件化组织体系与预设装配逻辑图**：展示三大插件族（rules/process/templates）的逐一盘点、四个预设（full-lifecycle/testing-only/maintenance/quick-start）的装配矩阵，以及「plugins 手动组合 > preset 展开」的解析激活引擎。 |
-| **05** | [`05-aclh-design-logic-e2e-chain.excalidraw`](file:///Users/hylas/Desktop/ai-coding-lifecycle-harness/docs/diagrams/05-aclh-design-logic-e2e-chain.excalidraw) | **设计逻辑与端到端执行链路图**：展示「五大痛点 → 五种机制回应 → 规则/流程/记忆/门禁四大支柱」，以及 Agent 从启动 → init-task → 内环 TDD → check.mjs → pre-commit → 外环审查 → 交付沉淀（含拒绝回绕）的完整执行链路。 |
+| **05** | [`05-aclh-design-logic-e2e-chain.excalidraw`](file:///Users/hylas/Desktop/ai-coding-lifecycle-harness/docs/diagrams/05-aclh-design-logic-e2e-chain.excalidraw) | **设计逻辑与端到端执行链路图**：展示「五大痛点 → 五种机制回应 → 规则/流程/记忆/门禁四大支柱」，以及 Agent 从启动 → init-task → 内环 TDD → check.ts → pre-commit → 外环审查 → 交付沉淀（含拒绝回绕）的完整执行链路。 |
 
 > **打开方式**：
 > 1. 在 VS Code 中安装 **Excalidraw 扩展** 直接双击 `.excalidraw` 文件查看与编辑。

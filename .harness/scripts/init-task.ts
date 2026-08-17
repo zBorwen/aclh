@@ -3,19 +3,29 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ROOT_DIR = path.resolve(__dirname, '../../');
-const HARNESS_DIR = path.join(ROOT_DIR, '.harness');
-const DOCS_DIR = path.join(ROOT_DIR, 'docs/wip');
+// ============================================================================
+// ACLH Task Initializer (TypeScript, runs natively on Node >= 22 via type stripping)
+// Usage: node .harness/scripts/init-task.ts <TASK_ID>
+// ============================================================================
 
-const taskId = process.argv[2];
+interface TemplateRef {
+  src: string;
+  dest: string;
+}
+
+const __filename: string = fileURLToPath(import.meta.url);
+const __dirname: string = path.dirname(__filename);
+const ROOT_DIR: string = path.resolve(__dirname, '../../');
+const HARNESS_DIR: string = path.join(ROOT_DIR, '.harness');
+const DOCS_DIR: string = path.join(ROOT_DIR, 'docs/wip');
+
+const taskId: string | undefined = process.argv[2];
 if (!taskId) {
-  console.error("Usage: node .harness/scripts/init-task.mjs <TASK_ID>");
+  console.error("Usage: node .harness/scripts/init-task.ts <TASK_ID>");
   process.exit(1);
 }
 
-const taskDir = path.join(DOCS_DIR, taskId);
+const taskDir: string = path.join(DOCS_DIR, taskId);
 if (fs.existsSync(taskDir)) {
   console.warn(`[Warning] Task directory ${taskDir} already exists. Will not overwrite.`);
   process.exit(1);
@@ -23,15 +33,15 @@ if (fs.existsSync(taskDir)) {
 
 fs.mkdirSync(taskDir, { recursive: true });
 
-let createdFiles = [];
+const createdFiles: string[] = [];
 
 // Copy templates
-const templates = [
+const templates: TemplateRef[] = [
   { src: 'spec.md', dest: 'spec.md' },
   { src: 'task-tdd.md', dest: 'tasks.md' }
 ];
 
-templates.forEach(t => {
+for (const t of templates) {
   const srcPath = path.join(HARNESS_DIR, 'plugins/templates', t.src);
   const destPath = path.join(taskDir, t.dest);
   if (fs.existsSync(srcPath)) {
@@ -41,7 +51,7 @@ templates.forEach(t => {
     fs.writeFileSync(destPath, `# ${t.dest}\n`);
   }
   createdFiles.push(t.dest);
-});
+}
 
 // Create test-plan.md
 fs.writeFileSync(path.join(taskDir, 'test-plan.md'), '# Test Plan\n\n');
@@ -53,26 +63,27 @@ createdFiles.push('changelog.md');
 
 // Create .state.yaml
 const templatePath = path.join(DOCS_DIR, '.state-template.yaml');
-let stateContent = '';
 if (fs.existsSync(templatePath)) {
-  stateContent = fs.readFileSync(templatePath, 'utf8');
+  let stateContent: string = fs.readFileSync(templatePath, 'utf8');
   const now = new Date().toISOString();
   const today = now.split('T')[0];
   stateContent = `task_id: "${taskId}"\ncreated_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
   // Replace dummy dates in template with today
   stateContent = stateContent.replace(/2023-10-25/g, today);
+  fs.writeFileSync(path.join(taskDir, '.state.yaml'), stateContent);
 } else {
   const now = new Date().toISOString();
-  stateContent = `task_id: "${taskId}"
+  fs.writeFileSync(path.join(taskDir, '.state.yaml'), `task_id: "${taskId}"
 phase: "requirements"
 status: "active"
 created_at: "${now}"
 updated_at: "${now}"
-`;
+`);
 }
-fs.writeFileSync(path.join(taskDir, '.state.yaml'), stateContent);
 createdFiles.push('.state.yaml');
 
 console.log(`Task ${taskId} initialized successfully at docs/wip/${taskId}/`);
 console.log(`Files created:`);
-createdFiles.forEach(f => console.log(`  - ${f}`));
+for (const f of createdFiles) {
+  console.log(`  - ${f}`);
+}

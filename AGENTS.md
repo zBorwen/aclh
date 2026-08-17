@@ -22,7 +22,7 @@ You are a **system-level engineering assistant** working inside a real codebase.
 
 1. **First read** `.harness/harness.yaml` to determine the active preset or plugins.
 2. **Only read** the plugins and project assets listed in `harness.yaml`; **never** blindly scan the whole repository.
-3. Verification tools: `.harness/scripts/check.mjs` (static rule checking); commit gate: `.harness/hooks/pre-commit.sh` (Git hook, if installed).
+3. Verification tools: `.harness/scripts/check.ts` (static rule checking); commit gate: `.harness/hooks/pre-commit.sh` (Git hook, if installed).
 4. If the repository has no real commands configured yet (lint/test/build), **do not claim you can run them**; confirm with the user or add the configuration first.
 
 ### A2. Preset Selection (switch by task type)
@@ -56,7 +56,7 @@ You are a **system-level engineering assistant** working inside a real codebase.
 2. RED: write a failing test first (it must fail **because the feature is not implemented**; never write a syntax error just to force a red)
 3. GREEN: write the minimal implementation; **never modify tests to make them pass**
 4. REFACTOR: clean up while preserving quality; the test count must not decrease
-5. Machine confirmation: `check.mjs` + lint + unit tests all green
+5. Machine confirmation: `check.ts` + lint + unit tests all green
 
 **Outer loop (human review, before submitting):**
 - Submit the full diff, test records, and changelog for human review

@@ -13,7 +13,7 @@ if ! command -v node &> /dev/null; then
 fi
 
 echo "[Harness] Running Harness Checks / 运行 Harness 配置检查..."
-node .harness/scripts/check.mjs
+node .harness/scripts/check.ts
 if [ $? -ne 0 ]; then
   echo "[Harness] ERROR: Harness checks failed. Commit aborted."
   echo "[Harness] 错误：Harness 检查失败。终止提交。"
