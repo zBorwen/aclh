@@ -47,6 +47,7 @@ workflow:
       constraints:
         - coverage >= threshold # 测试覆盖率必须达标
         - edge cases covered # 必须覆盖边界情况
+        - adversarial self-review passed before human review # 人工审查前必须通过对抗式自检 (node .harness/scripts/self-review.ts)
       exit: all tests green, human review passed # 退出条件：测试全绿，通过人工审查
 
     - name: delivery

@@ -25,6 +25,10 @@ workflow:
   outer_loop:
     description: 人工代码审查循环 (Human Review Loop)
     steps:
+      - name: SELF-REVIEW
+        action: run adversarial self-review before submission # 提交前先运行对抗式自检
+        tool: node .harness/scripts/self-review.ts <TASK_ID> # 校验任务产物与状态，逐条回答质问清单
+        gate: no MISS items remain # 不允许留下缺失项；发现的缺口必须修复或记录到 .state.yaml 的 self_review 段
       - name: SUBMIT
         action: present to human # 提交给人进行审查
         outcomes:
