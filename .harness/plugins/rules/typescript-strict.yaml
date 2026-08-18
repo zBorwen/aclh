@@ -10,45 +10,40 @@ plugin:
     - typescript
     - strict
 
+# These prose rules are advisory until backed by executed compiler/linter evidence.
 rules:
   compiler_requirements:
-    - strict mode # 开启严格模式
+    - strict mode
     - noImplicitAny
     - strictNullChecks
     - noUnusedLocals
     - noUnusedParameters
-
   type_rules:
-    - prefer interfaces for object shapes # 对象类型优先使用 interface
-    - use type for unions/intersections # 联合类型和交叉类型使用 type
-    - no `any` (use `unknown`) # 禁止使用 any，不确定的类型请使用 unknown
-    - prefer `as const` for literals # 字面量对象或数组优先使用 as const
-    - use discriminated unions for state machines # 状态机模式推荐使用可辨识联合类型 (Discriminated Unions)
-    - never use `@ts-ignore` (use `@ts-expect-error` with comment) # 永远不要用 @ts-ignore，如有必要请带注释使用 @ts-expect-error
-
+    - prefer interfaces for object shapes
+    - use type for unions/intersections
+    - no `any` (use `unknown`)
+    - prefer `as const` for literals
+    - use discriminated unions for state machines
+    - never use `@ts-ignore` (use `@ts-expect-error` with comment)
   function_rules:
-    - always type return values for exported functions # 导出的函数必须显式指定返回类型
-    - use generics instead of `any` # 优先使用泛型代替 any
-    - prefer `readonly` for immutable parameters # 不可变参数应标记为 readonly
-
+    - always type return values for exported functions
+    - use generics instead of `any`
+    - prefer `readonly` for immutable parameters
   import_rules:
-    - use absolute imports with path aliases # 使用路径别名的绝对路径导入
-    - barrel exports only at module boundary # 仅在模块边界(如 index.ts)使用集中导出(barrel exports)
-
-examples:
-  - do: |
-      // 好的做法：使用 @ts-expect-error 并说明原因
-      // @ts-expect-error: 第三方库类型缺失
-      doSomethingCrazy();
-  - do_not: |
-      // 错误做法：直接使用 @ts-ignore
-      // @ts-ignore
-      doSomethingCrazy();
+    - use absolute imports with path aliases
+    - barrel exports only at module boundary
 
 checks:
-  - type: eslint-delegate
-    description: 运行 tsc 检查类型错误
-  - type: eslint-delegate
+  - id: ts-typecheck
+    type: eslint-delegate
+    enforcement: verifiable
+    description: TypeScript compiler verification is delegated until command evidence is captured
+    rule: tsc --noEmit
+  - id: ts-no-explicit-any
+    type: eslint-delegate
+    enforcement: verifiable
     rule: "@typescript-eslint/no-explicit-any"
-  - type: eslint-delegate
+  - id: ts-no-unused-vars
+    type: eslint-delegate
+    enforcement: verifiable
     rule: "@typescript-eslint/no-unused-vars"
