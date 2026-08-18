@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 
 interface ModuleDef { name?: unknown; path?: unknown; depends_on?: unknown; [key: string]: unknown; }
-interface GenericEntry { id?: unknown; module?: unknown; modules?: unknown; tags?: unknown; category?: unknown; affected_files?: unknown; applies_to?: unknown; [key: string]: unknown; }
+interface GenericEntry { id?: unknown; module?: unknown; modules?: unknown; tags?: unknown; category?: unknown; severity?: unknown; affected_files?: unknown; applies_to?: unknown; [key: string]: unknown; }
+interface RankedEntry { score: number; reasons: string[]; entry: GenericEntry; }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
@@ -52,15 +53,33 @@ function matchesFilePattern(pattern: string, file: string): boolean {
   const prefix = normalize(pattern).split('*')[0].replace(/\/$/,'');
   return prefix.length > 0 && normalize(file).startsWith(prefix);
 }
-function entryMatches(entry: GenericEntry, modules: Set<string>, tags: Set<string>, files: Set<string>): boolean {
+function rankEntry(entry: GenericEntry, modules: Set<string>, tags: Set<string>, files: Set<string>, scoring: Record<string,number>): RankedEntry | null {
+  let score = 0;
+  const reasons: string[] = [];
   const entryModules = new Set([...(typeof entry.module === 'string' ? [entry.module] : []), ...arrayOfStrings(entry.modules)]);
-  if ([...entryModules].some(m=>modules.has(m))) return true;
+  if ([...entryModules].some(m=>modules.has(m))) { score += scoring.module_match ?? 5; reasons.push('module'); }
   const entryTags = new Set([...arrayOfStrings(entry.tags), ...(typeof entry.category === 'string' ? [entry.category] : [])]);
-  if ([...entryTags].some(t=>tags.has(t))) return true;
+  if ([...entryTags].some(t=>tags.has(t))) { score += scoring.tag_match ?? 3; reasons.push('tag'); }
   const fileRefs = [...arrayOfStrings(entry.affected_files), ...arrayOfStrings(entry.applies_to)];
-  if (fileRefs.some(ref=>[...files].some(file=>ref.includes('*') ? matchesFilePattern(ref,file) : normalize(ref)===normalize(file)))) return true;
-  return false;
+  if (fileRefs.some(ref=>[...files].some(file=>ref.includes('*') ? matchesFilePattern(ref,file) : normalize(ref)===normalize(file)))) { score += scoring.file_match ?? 4; reasons.push('file'); }
+  if (entry.severity === 'high' || entry.severity === 'critical') { score += scoring.high_severity_bonus ?? 2; reasons.push('severity'); }
+  return score > 0 ? {score,reasons,entry} : null;
 }
+function rankedTopK(entries: unknown, modules: Set<string>, tags: Set<string>, files: Set<string>, scoring: Record<string,number>, max: number): {items:RankedEntry[];total_matches:number} {
+  const ranked = Array.isArray(entries)
+    ? (entries as GenericEntry[]).map(entry=>rankEntry(entry,modules,tags,files,scoring)).filter((entry):entry is RankedEntry=>entry!==null)
+    : [];
+  ranked.sort((a,b)=>b.score-a.score || String(a.entry.id??'').localeCompare(String(b.entry.id??'')));
+  return {items:ranked.slice(0,max),total_matches:ranked.length};
+}
+
+const governance = loadYaml('.harness/governance.yaml') as {
+  knowledge_retrieval?: { max_items_per_source?: unknown; scoring?: Record<string,unknown> };
+};
+const maxItemsRaw = governance.knowledge_retrieval?.max_items_per_source;
+const maxItems = Number.isInteger(maxItemsRaw) && Number(maxItemsRaw) > 0 ? Number(maxItemsRaw) : 5;
+const rawScoring = governance.knowledge_retrieval?.scoring ?? {};
+const scoring: Record<string,number> = Object.fromEntries(Object.entries(rawScoring).filter(([,v])=>typeof v==='number'));
 
 const state = loadYaml(normalize(path.relative(ROOT,statePath))) as {
   identity?: { base_commit?: unknown };
@@ -96,27 +115,30 @@ const fileSet = new Set(effectiveFiles);
 const bugLedger = loadYaml('.harness/project/bug-ledger.yaml');
 const gotchas = loadYaml('.harness/project/gotchas.yaml');
 const decisions = loadYaml('.harness/project/decisions.yaml');
-const bugs = Array.isArray(bugLedger.entries) ? (bugLedger.entries as GenericEntry[]).filter(entry=>entryMatches(entry,selectedModuleNames,tagSet,fileSet)) : [];
-const gotchaEntries = Array.isArray(gotchas.entries) ? (gotchas.entries as GenericEntry[]).filter(entry=>entryMatches(entry,selectedModuleNames,tagSet,fileSet)) : [];
-const decisionEntries = Array.isArray(decisions.entries) ? (decisions.entries as GenericEntry[]).filter(entry=>entryMatches(entry,selectedModuleNames,tagSet,fileSet)) : [];
+const bugs = rankedTopK(bugLedger.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
+const gotchaEntries = rankedTopK(gotchas.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
+const decisionEntries = rankedTopK(decisions.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
 const basis = basisHash(changed,explicitModules,tags,explicitFiles);
+const selectedCount = bugs.items.length + gotchaEntries.items.length + decisionEntries.items.length;
+const totalMatches = bugs.total_matches + gotchaEntries.total_matches + decisionEntries.total_matches;
 
 if (mode === '--verify') {
   if (!fs.existsSync(outputPath)) { console.error('Context FAIL: context.json missing; run context-select.ts --generate'); process.exit(1); }
   let existing:any;
   try { existing=JSON.parse(fs.readFileSync(outputPath,'utf8')); }
   catch { console.error('Context FAIL: context.json is invalid JSON'); process.exit(1); }
-  if (existing.version!=='1.0'||existing.task_id!==taskId||existing.basis?.sha256!==basis) {
+  if (existing.version!=='1.1'||existing.task_id!==taskId||existing.basis?.sha256!==basis) {
     console.error('Context FAIL: context.json is stale for the current task scope/change set');
     process.exit(1);
   }
-  console.log(`Context PASS for ${taskId}: ${selectedModules.length} module(s), ${bugs.length+gotchaEntries.length+decisionEntries.length} knowledge item(s).`);
+  console.log(`Context PASS for ${taskId}: ${selectedModules.length} module(s), ${selectedCount}/${totalMatches} knowledge match(es) selected.`);
   process.exit(0);
 }
 
 const output = {
-  version:'1.0', task_id:taskId, generated_at:new Date().toISOString(),
+  version:'1.1', task_id:taskId, generated_at:new Date().toISOString(),
   basis:{base_commit:baseCommit,sha256:basis,changed_files:changed,explicit_scope:{modules:explicitModules,tags,files:explicitFiles}},
+  retrieval:{max_items_per_source:maxItems,scoring},
   selected:{
     profile:'.harness/project/profile.yaml',
     modules:selectedModules,
@@ -124,4 +146,4 @@ const output = {
   }
 };
 fs.writeFileSync(outputPath,`${JSON.stringify(output,null,2)}\n`);
-console.log(`Context generated for ${taskId}: ${selectedModules.length} module(s), ${bugs.length+gotchaEntries.length+decisionEntries.length} knowledge item(s) -> ${normalize(path.relative(ROOT,outputPath))}`);
+console.log(`Context generated for ${taskId}: ${selectedModules.length} module(s), ${selectedCount}/${totalMatches} knowledge match(es) -> ${normalize(path.relative(ROOT,outputPath))}`);
