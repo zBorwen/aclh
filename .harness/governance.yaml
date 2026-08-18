@@ -1,4 +1,4 @@
-version: "1.2"
+version: "1.3"
 
 # P2 risk-based governance. Higher levels only add constraints; they never weaken
 # lower-level deterministic machine checks.
@@ -53,3 +53,13 @@ verification_strategies:
     required_markers: [DOC_STRUCTURE, LINK_OR_EXAMPLE_CHECK]
 
 default_verification_strategy: tdd
+
+# Metadata retrieval is bounded so project knowledge can grow without being
+# injected wholesale into every Codex context.
+knowledge_retrieval:
+  max_items_per_source: 5
+  scoring:
+    module_match: 5
+    file_match: 4
+    tag_match: 3
+    high_severity_bonus: 2
