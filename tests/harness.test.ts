@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { parse as parseYaml } from 'yaml';
 
 function run(args: string[]) {
   return spawnSync(process.execPath, args, {
@@ -54,6 +56,28 @@ test('active executable checks declare an explicit enforcement level', () => {
   };
 
   assert.equal(report.summary.config_errors, 0);
+});
+
+test('minimal TypeScript baseline blocks ts-ignore but keeps lint-dependent rules verifiable', () => {
+  const plugin = parseYaml(
+    fs.readFileSync('.harness/plugins/rules/typescript-strict.yaml', 'utf8'),
+  ) as {
+    checks: Array<{ id: string; type: string; enforcement: string }>;
+  };
+
+  const noIgnore = plugin.checks.find(check => check.id === 'ts-no-ignore');
+  const noAny = plugin.checks.find(check => check.id === 'ts-no-explicit-any');
+
+  assert.deepEqual(noIgnore, {
+    id: 'ts-no-ignore',
+    type: 'grep-pattern',
+    enforcement: 'blocking',
+    severity: 'error',
+    description: '禁止使用 @ts-ignore；如确需抑制错误，使用带说明的 @ts-expect-error',
+    target: 'src/**/*.{ts,tsx}',
+    pattern: '@ts-ignore',
+  });
+  assert.equal(noAny?.enforcement, 'verifiable');
 });
 
 test('init-task rejects traversal-like task identifiers', () => {
