@@ -89,7 +89,7 @@ createdFiles.push('.state.yaml');
 
 fs.writeFileSync(
   path.join(taskDir, 'evidence.json'),
-  `${JSON.stringify({ version: '1.0', task_id: taskId, updated_at: null, gates: {} }, null, 2)}\n`,
+  `${JSON.stringify({ version: '1.1', task_id: taskId, updated_at: null, gates: {} }, null, 2)}\n`,
 );
 createdFiles.push('evidence.json');
 
