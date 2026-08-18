@@ -92,6 +92,7 @@ identity:
 - Agent：Codex only
 - P0：完成
 - P1：完成
-- P2：实现完成，等待最终 CI/PR 验收
+- P2 Governance Scaling：**完成**
+- P2 validation：strict typecheck + 27 regression tests + CI evidence artifact 全部通过
 - Semgrep：未接入
 - 静态架构图：按约定在核心阶段完成后统一更新
