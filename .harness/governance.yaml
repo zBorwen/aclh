@@ -1,0 +1,31 @@
+version: "1.0"
+
+# P2 risk-based governance. Higher levels only add constraints; they never weaken
+# lower-level deterministic machine checks.
+risk_levels:
+  L0:
+    name: trivial
+    description: "机械性、低影响变更；最小机器门禁"
+    required_gates: [check]
+    builder_self_review: false
+    independent_review: none
+  L1:
+    name: low-risk
+    description: "局部低风险代码变更；完整机器验证 + builder self-review"
+    required_gates: [check, typecheck, test]
+    builder_self_review: true
+    independent_review: none
+  L2:
+    name: normal
+    description: "默认业务开发；完整机器验证 + builder self-review + 独立 review"
+    required_gates: [check, typecheck, test]
+    builder_self_review: true
+    independent_review: codex-or-human
+  L3:
+    name: high-risk
+    description: "高风险/跨边界变更；完整门禁 + 人工独立 review"
+    required_gates: [check, typecheck, test]
+    builder_self_review: true
+    independent_review: human
+
+default_risk_level: L2
