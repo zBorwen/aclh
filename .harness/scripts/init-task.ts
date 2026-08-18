@@ -66,14 +66,17 @@ if (!(verificationStrategy in strategies)) {
 let branch: string;
 let baseCommit: string;
 try {
-  branch = git(['branch', '--show-current']);
+  const ciHeadBranch = process.env.GITHUB_ACTIONS === 'true' && process.env.GITHUB_HEAD_REF
+    ? process.env.GITHUB_HEAD_REF.trim()
+    : '';
+  branch = ciHeadBranch || git(['branch', '--show-current']);
   baseCommit = git(['rev-parse', 'HEAD']);
 } catch (error) {
   console.error(`Cannot resolve Git task identity: ${(error as Error).message}`);
   process.exit(1);
 }
 if (!branch) {
-  console.error('Cannot initialize a task from detached HEAD; create or checkout a branch first.');
+  console.error('Cannot initialize a task from detached HEAD without a branch identity. Checkout a branch first.');
   process.exit(1);
 }
 
