@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 
 interface RiskPolicy {
+  context_required?: unknown;
   builder_self_review?: unknown;
   independent_review?: unknown;
 }
@@ -43,6 +44,11 @@ function run(script: string, args: string[]): void {
 
 console.log(`[Delivery] ${taskId}: applying risk ${risk}`);
 run('.harness/scripts/task-identity.ts', [taskId, '--verify']);
+if (policy.context_required === true) {
+  run('.harness/scripts/context-select.ts', [taskId, '--verify']);
+} else {
+  console.log(`[Delivery] ${taskId}: fresh task context not required by risk ${risk}`);
+}
 run('.harness/scripts/verification-plan.ts', [taskId]);
 run('.harness/scripts/evidence.ts', [taskId, '--verify']);
 
