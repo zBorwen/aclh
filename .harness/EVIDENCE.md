@@ -1,15 +1,10 @@
-# ACLH Evidence Model v1.2
+# ACLH Evidence & Review Trust Model v1.3
 
-Evidence turns a claimed machine check into a recorded execution result. P1 uses two deliberately separate evidence channels:
+P1 separates objective machine evidence from semantic review. A claim is not considered independently reviewed merely because the builder answered its own checklist.
 
-- **Local task evidence**: fast feedback for Codex and pre-push workflow enforcement.
-- **CI evidence**: independent GitHub Actions verification bound to server-provided run provenance.
+## 1. Machine evidence
 
-The two channels must not be treated as interchangeable.
-
-## Canonical gates
-
-P1 supports three required repository gates:
+Three canonical gates are required:
 
 | Gate | Canonical command | Local pre-push | CI verifier |
 |---|---|---:|---:|
@@ -17,89 +12,80 @@ P1 supports three required repository gates:
 | `typecheck` | `npm run typecheck` | required | required |
 | `test` | `npm test` | required | required |
 
-## Local task evidence
+Local task evidence lives at `docs/wip/<TASK_ID>/evidence.json` (schema 1.1). Every PASS is bound to the current `commit_sha` plus a `worktree_sha256` fingerprint. Repository changes make prior evidence stale.
 
-Each initialized task owns `docs/wip/<TASK_ID>/evidence.json` with schema version `1.1`.
+GitHub Actions independently reruns the canonical gates through `.harness/scripts/ci-evidence.ts`. It does not trust local evidence and uploads `.harness/artifacts/ci-evidence.json` with GitHub-provided repository/run provenance.
 
-Every local gate is bound to:
+## 2. Builder self-review
 
-- `commit_sha`: current `git rev-parse HEAD`.
-- `worktree_sha256`: SHA-256 fingerprint of tracked changes plus untracked file contents.
+`.harness/scripts/self-review.ts` remains a useful adversarial checklist for the builder. It verifies task artifacts and requires explicit answers to Q1-Q10. It is **not independent evidence** and cannot satisfy the independent-review gate by itself.
 
-The task's own `evidence.json` is excluded from the fingerprint so recording evidence does not invalidate itself.
+## 3. Independent semantic review
 
-A local gate is fresh only when its recorded repository snapshot exactly matches the current repository snapshot. Any later commit, staged change, unstaged change, or untracked-file content change invalidates prior PASS evidence.
-
-The recorder snapshots the repository before and after a gate. If the gate mutates repository state, the result is `FAIL` even when the command exits 0.
-
-### Local commands
+P1 requires a second review context before task delivery:
 
 ```bash
-npm run evidence -- JIRA-101 --gate check
-npm run evidence -- JIRA-101 --gate typecheck
-npm run evidence -- JIRA-101 --gate test
-npm run evidence -- JIRA-101 --verify
+node .harness/scripts/independent-review.ts JIRA-101 --prepare
 ```
 
-`--verify` requires all three gates to contain fresh PASS evidence for the exact current repository snapshot.
+This creates `docs/wip/JIRA-101/review-packet.md` containing the task artifacts and exact repository snapshot. The packet must be reviewed either by:
 
-## CI evidence
+- a **fresh Codex context** that did not build the change; or
+- a human reviewer.
 
-`.harness/scripts/ci-evidence.ts` is a separate verifier that is intentionally restricted to GitHub Actions (`GITHUB_ACTIONS=true`). It does not consume or trust task-local `evidence.json` files.
-
-It independently executes all canonical gates and writes the generated artifact to:
-
-```text
-.harness/artifacts/ci-evidence.json
-```
-
-The file is ignored by Git and uploaded by `Harness CI` as a workflow artifact, so it is not committed back into the repository.
-
-CI evidence contains:
+The reviewer records `docs/wip/JIRA-101/independent-review.json` with schema 1.0:
 
 ```json
 {
   "version": "1.0",
-  "verifier": {
-    "kind": "github-actions",
-    "script": ".harness/scripts/ci-evidence.ts"
-  },
-  "provenance": {
-    "repository": "owner/repo",
+  "task_id": "JIRA-101",
+  "builder": { "session_id": "builder-session" },
+  "reviewer": { "kind": "codex-fresh-context", "session_id": "review-session" },
+  "repository": {
     "commit_sha": "0123456789abcdef...",
-    "run_id": "123456789",
-    "run_attempt": "1",
-    "workflow": "Harness CI",
-    "actor": "github-user",
-    "server_url": "https://github.com"
+    "worktree_sha256": "..."
   },
-  "result": "PASS",
-  "gates": {
-    "check": { "command": "npm run check", "exit_code": 0, "result": "PASS" },
-    "typecheck": { "command": "npm run typecheck", "exit_code": 0, "result": "PASS" },
-    "test": { "command": "npm test", "exit_code": 0, "result": "PASS" }
-  }
+  "reviewed_at": "2026-08-19T00:00:00.000Z",
+  "verdict": "PASS",
+  "findings": [],
+  "notes": "Acceptance criteria, regressions, root cause and tests reviewed."
 }
 ```
 
-The verifier records all gate results, writes the artifact even when one or more gates fail, and exits non-zero if any required gate fails. The workflow uploads the artifact with `if: always()` so failed verification still leaves inspectable evidence.
+Then run:
 
-## Trust model
+```bash
+node .harness/scripts/independent-review.ts JIRA-101 --verify
+```
 
-P1 establishes three distinct claims:
+Verification blocks when the record is missing, stale, rejected, malformed, uses an unsupported reviewer kind, or declares the same builder/reviewer session id.
 
-1. **Execution**: the canonical command actually ran and produced an exit code.
-2. **Freshness**: local PASS evidence belongs to the exact repository snapshot that was checked.
-3. **Provenance separation**: CI evidence is generated by a GitHub Actions verifier using GitHub-provided run identity, not by trusting the task-local JSON written by Codex.
+### Trust boundary
 
-Local evidence remains editable by a repository writer and is therefore not an independent attestation. CI evidence is stronger because it is produced inside the server-side workflow and stored as a workflow artifact, but ACLH does not claim cryptographic non-repudiation or signed attestations in P1.
+ACLH can enforce the **protocol** (separate record, distinct declared session ids, PASS verdict, exact repository snapshot), but a repository-only tool cannot cryptographically prove that two Codex session IDs truly represent isolated model contexts. Therefore P1 does not claim cryptographic reviewer independence. A human review or an external orchestrator can provide a stronger identity boundary later.
 
-## Enforcement boundary
+## 4. Delivery order
 
-The canonical `check`, `typecheck`, and `test` gates are **evidence-backed blocking workflow gates**.
+The local completion sequence is:
 
-This does not automatically promote similarly named plugin checks. For example, `ts-typecheck` remains `verifiable` inside `check.ts` while `check.ts` only delegates that rule. The workflow-level `npm run typecheck` gate is blocking because ACLH actually executes it through the evidence verifier.
+```text
+fresh machine evidence
+  → builder adversarial self-review
+  → fresh-context/human independent review
+  → human delivery/review
+```
+
+The pre-push hook enforces these three local gates in that order when installed. CI separately enforces objective machine gates and provenance.
 
 ## P1 completion boundary
 
-P1 intentionally stops at deterministic execution evidence, freshness, and independent CI provenance. It does **not** include Semgrep, AST/dependency analysis, semantic review-agent separation, signed attestations, dashboards, or knowledge retrieval. Those are later phases and should not be pulled into P1 retroactively.
+P1 includes:
+
+1. real execution evidence for check/typecheck/test;
+2. commit + worktree freshness;
+3. evidence-backed blocking;
+4. independent GitHub Actions provenance;
+5. builder self-review kept distinct from independent semantic review;
+6. a fresh-context/human review protocol bound to the exact repository snapshot.
+
+P1 does not include Semgrep, AST/dependency analysis, cryptographic reviewer identity, signed attestations, dashboards, or knowledge retrieval.
