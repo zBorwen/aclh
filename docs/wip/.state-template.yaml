@@ -1,3 +1,16 @@
+task_id: "{{TASK_ID}}"
+risk_level: "{{RISK_LEVEL}}" # L0 | L1 | L2 | L3
+verification_strategy: "{{VERIFICATION_STRATEGY}}" # tdd | component | config | migration | docs
+identity:
+  branch: "{{BRANCH}}"
+  base_commit: "{{BASE_COMMIT}}"
+  pr_number: null
+context_scope:
+  modules: []
+  tags: []
+  files: []
+created_at: "{{CREATED_AT}}"
+updated_at: "{{UPDATED_AT}}"
 phase: "requirements" # requirements | design | task | implement | testing | delivery
 status: "active"      # active | paused | blocked
 review_history: []
