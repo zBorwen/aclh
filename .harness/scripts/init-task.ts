@@ -24,6 +24,7 @@ function git(args: string[]): string {
   if (result.status !== 0) throw new Error(result.stderr.trim() || `git ${args.join(' ')} failed`);
   return result.stdout.trim();
 }
+function yamlSafe(value: string): string { return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"'); }
 
 const args = process.argv.slice(2);
 const taskId: string | undefined = args[0];
@@ -113,20 +114,28 @@ createdFiles.push('changelog.md');
 
 const templatePath = path.join(DOCS_DIR, '.state-template.yaml');
 const now = new Date().toISOString();
-const today = now.split('T')[0];
-const identityBlock = `identity:\n  branch: "${branch.replaceAll('"', '\\"')}"\n  base_commit: "${baseCommit}"\n  pr_number: null\n`;
-const contextBlock = `context_scope:\n  modules: []\n  tags: []\n  files: []\n`;
-if (fs.existsSync(templatePath)) {
-  let stateContent: string = fs.readFileSync(templatePath, 'utf8');
-  stateContent = `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\n${identityBlock}${contextBlock}created_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
-  stateContent = stateContent.replace(/2023-10-25/g, today);
-  fs.writeFileSync(path.join(taskDir, '.state.yaml'), stateContent);
-} else {
-  fs.writeFileSync(
-    path.join(taskDir, '.state.yaml'),
-    `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\n${identityBlock}${contextBlock}phase: "requirements"\nstatus: "active"\ncreated_at: "${now}"\nupdated_at: "${now}"\n`,
-  );
+if (!fs.existsSync(templatePath)) {
+  console.error('Missing docs/wip/.state-template.yaml');
+  fs.rmSync(taskDir, { recursive: true, force: true });
+  process.exit(1);
 }
+let stateContent = fs.readFileSync(templatePath, 'utf8');
+const replacements: Record<string,string> = {
+  '{{TASK_ID}}': yamlSafe(taskId),
+  '{{RISK_LEVEL}}': yamlSafe(riskLevel),
+  '{{VERIFICATION_STRATEGY}}': yamlSafe(verificationStrategy),
+  '{{BRANCH}}': yamlSafe(branch),
+  '{{BASE_COMMIT}}': baseCommit,
+  '{{CREATED_AT}}': now,
+  '{{UPDATED_AT}}': now,
+};
+for (const [token,value] of Object.entries(replacements)) stateContent = stateContent.replaceAll(token,value);
+if (/\{\{[A-Z_]+\}\}/.test(stateContent)) {
+  console.error('Unresolved placeholder in .state-template.yaml');
+  fs.rmSync(taskDir, { recursive: true, force: true });
+  process.exit(1);
+}
+fs.writeFileSync(path.join(taskDir, '.state.yaml'), stateContent);
 createdFiles.push('.state.yaml');
 
 fs.writeFileSync(path.join(taskDir, 'evidence.json'), `${JSON.stringify({ version: '1.1', task_id: taskId, updated_at: null, gates: {} }, null, 2)}\n`);
