@@ -2,10 +2,16 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parse as parseYaml } from 'yaml';
 
 interface TemplateRef {
   src: string;
   dest: string;
+}
+
+interface GovernanceConfig {
+  default_risk_level?: unknown;
+  risk_levels?: Record<string, unknown>;
 }
 
 const __filename: string = fileURLToPath(import.meta.url);
@@ -14,15 +20,34 @@ const ROOT_DIR: string = path.resolve(__dirname, '../../');
 const HARNESS_DIR: string = path.join(ROOT_DIR, '.harness');
 const DOCS_DIR: string = path.join(ROOT_DIR, 'docs/wip');
 
-const taskId: string | undefined = process.argv[2];
+const args = process.argv.slice(2);
+const taskId: string | undefined = args[0];
+const riskIndex = args.indexOf('--risk');
+const requestedRisk = riskIndex >= 0 ? args[riskIndex + 1] : undefined;
+
 if (!taskId) {
-  console.error('Usage: node .harness/scripts/init-task.ts <TASK_ID>');
+  console.error('Usage: node .harness/scripts/init-task.ts <TASK_ID> [--risk L0|L1|L2|L3]');
   process.exit(1);
 }
 
 if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId)) {
   console.error(`Invalid task ID: ${taskId}`);
   console.error('Task IDs may contain only letters, numbers, dots, underscores, and hyphens.');
+  process.exit(1);
+}
+
+const governancePath = path.join(HARNESS_DIR, 'governance.yaml');
+if (!fs.existsSync(governancePath)) {
+  console.error('Missing .harness/governance.yaml');
+  process.exit(1);
+}
+const governance = parseYaml(fs.readFileSync(governancePath, 'utf8')) as GovernanceConfig;
+const riskLevels = governance.risk_levels ?? {};
+const defaultRisk = typeof governance.default_risk_level === 'string' ? governance.default_risk_level : 'L2';
+const riskLevel = requestedRisk ?? defaultRisk;
+if (!(riskLevel in riskLevels)) {
+  console.error(`Invalid risk level: ${riskLevel}`);
+  console.error(`Allowed risk levels: ${Object.keys(riskLevels).join(', ')}`);
   process.exit(1);
 }
 
@@ -66,7 +91,7 @@ createdFiles.push('test-plan.md');
 
 fs.writeFileSync(
   path.join(taskDir, 'changelog.md'),
-  `# Changelog\n\n- ${new Date().toISOString().split('T')[0]}: Initialized task ${taskId}\n`,
+  `# Changelog\n\n- ${new Date().toISOString().split('T')[0]}: Initialized task ${taskId} (risk ${riskLevel})\n`,
 );
 createdFiles.push('changelog.md');
 
@@ -75,14 +100,14 @@ if (fs.existsSync(templatePath)) {
   let stateContent: string = fs.readFileSync(templatePath, 'utf8');
   const now = new Date().toISOString();
   const today = now.split('T')[0];
-  stateContent = `task_id: "${taskId}"\ncreated_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
+  stateContent = `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\ncreated_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
   stateContent = stateContent.replace(/2023-10-25/g, today);
   fs.writeFileSync(path.join(taskDir, '.state.yaml'), stateContent);
 } else {
   const now = new Date().toISOString();
   fs.writeFileSync(
     path.join(taskDir, '.state.yaml'),
-    `task_id: "${taskId}"\nphase: "requirements"\nstatus: "active"\ncreated_at: "${now}"\nupdated_at: "${now}"\n`,
+    `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nphase: "requirements"\nstatus: "active"\ncreated_at: "${now}"\nupdated_at: "${now}"\n`,
   );
 }
 createdFiles.push('.state.yaml');
@@ -93,7 +118,7 @@ fs.writeFileSync(
 );
 createdFiles.push('evidence.json');
 
-console.log(`Task ${taskId} initialized successfully at docs/wip/${taskId}/`);
+console.log(`Task ${taskId} initialized successfully at docs/wip/${taskId}/ (risk ${riskLevel})`);
 console.log('Files created:');
 for (const f of createdFiles) {
   console.log(`  - ${f}`);
