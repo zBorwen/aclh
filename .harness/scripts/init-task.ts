@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
 
@@ -17,6 +18,12 @@ const __dirname: string = path.dirname(__filename);
 const ROOT_DIR: string = path.resolve(__dirname, '../../');
 const HARNESS_DIR: string = path.join(ROOT_DIR, '.harness');
 const DOCS_DIR: string = path.join(ROOT_DIR, 'docs/wip');
+
+function git(args: string[]): string {
+  const result = spawnSync('git', args, { cwd: ROOT_DIR, encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(result.stderr.trim() || `git ${args.join(' ')} failed`);
+  return result.stdout.trim();
+}
 
 const args = process.argv.slice(2);
 const taskId: string | undefined = args[0];
@@ -55,6 +62,20 @@ if (!(verificationStrategy in strategies)) {
   process.exit(1);
 }
 
+let branch: string;
+let baseCommit: string;
+try {
+  branch = git(['branch', '--show-current']);
+  baseCommit = git(['rev-parse', 'HEAD']);
+} catch (error) {
+  console.error(`Cannot resolve Git task identity: ${(error as Error).message}`);
+  process.exit(1);
+}
+if (!branch) {
+  console.error('Cannot initialize a task from detached HEAD; create or checkout a branch first.');
+  process.exit(1);
+}
+
 const taskDir: string = path.resolve(DOCS_DIR, taskId);
 const relativeTaskDir: string = path.relative(DOCS_DIR, taskDir);
 if (relativeTaskDir.startsWith('..') || path.isAbsolute(relativeTaskDir)) { console.error(`Invalid task path: ${taskId}`); process.exit(1); }
@@ -86,22 +107,23 @@ createdFiles.push('test-plan.md');
 
 fs.writeFileSync(
   path.join(taskDir, 'changelog.md'),
-  `# Changelog\n\n- ${new Date().toISOString().split('T')[0]}: Initialized task ${taskId} (risk ${riskLevel}, strategy ${verificationStrategy})\n`,
+  `# Changelog\n\n- ${new Date().toISOString().split('T')[0]}: Initialized task ${taskId} (risk ${riskLevel}, strategy ${verificationStrategy}, branch ${branch})\n`,
 );
 createdFiles.push('changelog.md');
 
 const templatePath = path.join(DOCS_DIR, '.state-template.yaml');
 const now = new Date().toISOString();
 const today = now.split('T')[0];
+const identityBlock = `identity:\n  branch: "${branch.replaceAll('"', '\\"')}"\n  base_commit: "${baseCommit}"\n  pr_number: null\n`;
 if (fs.existsSync(templatePath)) {
   let stateContent: string = fs.readFileSync(templatePath, 'utf8');
-  stateContent = `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\ncreated_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
+  stateContent = `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\n${identityBlock}created_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
   stateContent = stateContent.replace(/2023-10-25/g, today);
   fs.writeFileSync(path.join(taskDir, '.state.yaml'), stateContent);
 } else {
   fs.writeFileSync(
     path.join(taskDir, '.state.yaml'),
-    `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\nphase: "requirements"\nstatus: "active"\ncreated_at: "${now}"\nupdated_at: "${now}"\n`,
+    `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\n${identityBlock}phase: "requirements"\nstatus: "active"\ncreated_at: "${now}"\nupdated_at: "${now}"\n`,
   );
 }
 createdFiles.push('.state.yaml');
@@ -109,6 +131,6 @@ createdFiles.push('.state.yaml');
 fs.writeFileSync(path.join(taskDir, 'evidence.json'), `${JSON.stringify({ version: '1.1', task_id: taskId, updated_at: null, gates: {} }, null, 2)}\n`);
 createdFiles.push('evidence.json');
 
-console.log(`Task ${taskId} initialized at docs/wip/${taskId}/ (risk ${riskLevel}, strategy ${verificationStrategy})`);
+console.log(`Task ${taskId} initialized at docs/wip/${taskId}/ (risk ${riskLevel}, strategy ${verificationStrategy}, branch ${branch})`);
 console.log('Files created:');
 for (const f of createdFiles) console.log(`  - ${f}`);
