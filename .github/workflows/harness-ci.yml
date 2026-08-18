@@ -23,11 +23,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Run canonical gates and generate CI evidence
+        run: node .harness/scripts/ci-evidence.ts
 
-      - name: Harness checks
-        run: npm run check
-
-      - name: Harness tests
-        run: npm test
+      - name: Upload CI evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: harness-ci-evidence-${{ github.sha }}
+          path: .harness/artifacts/ci-evidence.json
+          if-no-files-found: error
+          retention-days: 30
