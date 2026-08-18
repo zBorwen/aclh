@@ -1,8 +1,8 @@
 # AI Coding Lifecycle Harness (ACLH)
 
-一套把 AI 编码过程约束在 **规则 (Rules) + 流程 (Process) + 记忆 (Memory) + 门禁 (Guardrails)** 四条轨道上的工程治理模板。用于让 AI 代理（Cursor / Claude Code / Copilot / 通用 Agent）在真实项目中稳定地产出可审查、可复用、低返工的代码。
+一套把 AI 编码过程约束在 **规则 (Rules) + 流程 (Process) + 记忆 (Memory) + 门禁 (Guardrails)** 四条轨道上的工程治理模板。当前阶段只适配 **OpenAI Codex**，通过仓库根目录的 `AGENTS.md` 作为统一入口，在真实项目中约束 Codex 稳定地产出可审查、可复用、低返工的代码。
 
-> 设计全景见 [`HARNESS_ANALYSIS.md`](HARNESS_ANALYSIS.md)；代理行为约束见 [`AGENTS.md`](AGENTS.md)（最高优先级）。
+> 设计全景见 [`HARNESS_ANALYSIS.md`](HARNESS_ANALYSIS.md)；Codex 行为约束见 [`AGENTS.md`](AGENTS.md)（最高优先级）。
 
 ---
 
@@ -10,11 +10,11 @@
 
 ```
 .
-├── AGENTS.md                  # AI 代理最高约束：治理层 + 行为层（全英文）
+├── AGENTS.md                  # Codex 最高约束：治理层 + 行为层（全英文）
 ├── HARNESS_ANALYSIS.md        # 架构深度分析文档（中文）
-├── CLAUDE.md / .cursor/ / .github/  # 各 AI 工具入口（均转发到 AGENTS.md）
 ├── .harness/
 │   ├── harness.yaml           # 配置中心：preset 预设 / 插件装配
+│   ├── ENFORCEMENT.md         # advisory / verifiable / blocking 强制等级契约
 │   ├── plugins/
 │   │   ├── rules/             # 规范插件（naming / react / typescript-strict）
 │   │   ├── process/           # 流程插件（full-lifecycle / tdd-workflow / pr-review / testing-only）
@@ -25,6 +25,12 @@
 ├── docs/wip/                  # 任务工作区（按任务 ID 隔离）
 └── diagrams/                  # 5 张 Excalidraw 架构图
 ```
+
+## 当前 Agent 适配范围
+
+- **Supported:** OpenAI Codex（通过 `AGENTS.md` + `.harness/`）
+- **Not supported for now:** Cursor、GitHub Copilot、Claude Code 等专用入口
+- 当前阶段优先把 Codex 的治理、门禁和证据链跑通；其他 Agent 适配等核心模型稳定后再评估。
 
 ## 核心机制（30 秒版）
 
@@ -56,6 +62,7 @@ node .harness/scripts/self-review.ts JIRA-101 # 任务完成后的对抗式自�
 7. **package-lock.json 不纳入版本库**（`.gitignore` 排除），按仓库维护者偏好保持精简。
 8. **图表为静态产物**：`diagrams/` 下 5 张 Excalidraw 图由生成器脚本产出，生成器已删除；后续改图需直接编辑 JSON 或重建生成器脚本。
 9. **双环铁律**：禁止跳过 RED；禁止为通过测试而篡改测试；重构后测试数量不得减少；外环拒绝后禁止不写测试直接改实现。
+10. **当前只适配 Codex**：不维护 Cursor、Copilot、Claude Code 等专用入口文件，避免多 Agent 适配在核心治理模型未稳定前增加额外兼容成本。
 
 ## 接入真实项目指南（推荐顺序）
 
@@ -66,8 +73,9 @@ node .harness/scripts/self-review.ts JIRA-101 # 任务完成后的对抗式自�
 
 ## 当前状态（截至 2026-08）
 
+- Agent 适配：Codex only
 - `npm run typecheck`：通过（strict + erasableSyntaxOnly）
 - `node .harness/scripts/check.ts`：PASS（0 failed）
 - 5 张 Excalidraw 图：JSON 校验通过
 - Git hooks：未安装（本地开发阶段）
-- `lint` / `test` 命令：未配置（等接入真实项目后填入 profile.yaml）
+- `lint` 命令：未配置（等接入真实项目后填入 profile.yaml）
