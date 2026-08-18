@@ -15,56 +15,53 @@ plugin:
     - react
     - naming
 
+# Prose rules are advisory unless backed by an executable check below.
 rules:
   file_naming:
-    components: PascalCase  # 例如: UserProfile.tsx
-    hooks: camelCase, use prefix  # 例如: useUser.ts
-    utils: camelCase  # 例如: formatTime.ts
-    styles: kebab-case  # 例如: user-profile.css
-    tests: "{name}.test.{ext}"  # 例如: UserProfile.test.tsx
-    constants: UPPER_SNAKE_CASE  # 例如: API_ROUTES.ts
-    pages: PascalCase  # 例如: HomePage.tsx
-
+    components: PascalCase
+    hooks: camelCase, use prefix
+    utils: camelCase
+    styles: kebab-case
+    tests: "{name}.test.{ext}"
+    constants: UPPER_SNAKE_CASE
+    pages: PascalCase
   variable_naming:
     variables: camelCase
     constants: UPPER_SNAKE_CASE
     functions: camelCase
     classes: PascalCase
-    types: PascalCase, no I prefix  # 类型和接口不使用 I 前缀
+    types: PascalCase, no I prefix
     interfaces: PascalCase, no I prefix
     enums: PascalCase
     enum_members: PascalCase
-    css_classes: kebab-case BEM  # block__element--modifier
+    css_classes: kebab-case BEM
     css_variables: --kebab-case
     data_attributes: kebab-case
-
   directory_naming:
     features: kebab-case
-    components: PascalCase matching component  # 文件夹名需与其包含的主要组件名一致
-
-examples:
-  - type: file_naming
-    do: "UserProfile.tsx, useFetch.ts, auth-styles.css" # 正确示例
-    do_not: "userProfile.tsx, UseFetch.ts, AuthStyles.css" # 错误示例
-  - type: type_naming
-    do: "interface User { id: string; }" # 正确示例：不要有 I 前缀
-    do_not: "interface IUser { id: string; }" # 错误示例：使用了 I 前缀
+    components: PascalCase matching component
 
 checks:
-  - type: filename-pattern
+  - id: naming-001
+    type: filename-pattern
+    enforcement: blocking
     description: 检查组件文件名是否符合 PascalCase
     target: "src/components/**/*.tsx"
     pattern: "^[A-Z][a-zA-Z0-9]+$"
-  - type: filename-pattern
+  - id: naming-002
+    type: filename-pattern
+    enforcement: blocking
     description: 检查 Hook 文件名
     target: "src/hooks/**/*.ts"
     pattern: "^use[A-Z][a-zA-Z0-9]+$"
-    id: naming-002
-  - type: filename-pattern
+  - id: naming-003
+    type: filename-pattern
+    enforcement: blocking
     description: 检查样式文件名
     target: "src/**/*.css"
     pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
-    id: naming-003
-  - type: eslint-delegate
+  - id: naming-eslint
+    type: eslint-delegate
+    enforcement: verifiable
     description: 使用 ESLint 检查变量命名规范
     rule: naming-convention

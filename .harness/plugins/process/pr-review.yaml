@@ -9,21 +9,26 @@ plugin:
     - github
 
 workflow:
+  # Checklist items are advisory until backed by executable evidence.
   checklist:
-    - tests pass # 所有测试必须通过
-    - lint pass # 代码格式和静态检查通过
-    - no console.log # 代码中不得遗留调试用的 console.log
-    - no TODO without ticket # 所有的 TODO 注释必须附带关联的工单号
-    - changelog updated # 必须更新相应的变更日志
-    - breaking changes documented # 破坏性更新必须在文档中明确标出
+    - tests pass
+    - lint pass
+    - no console.log
+    - no TODO without ticket
+    - changelog updated
+    - breaking changes documented
 
   checks:
-    - type: grep-pattern
+    - id: pr-console-log
+      type: grep-pattern
+      enforcement: verifiable
       description: 检查是否遗留了 console.log
       target: "src/**/*.{ts,tsx}"
       pattern: "console\\.log"
       severity: warning
-    - type: grep-pattern
+    - id: pr-todo-ticket
+      type: grep-pattern
+      enforcement: verifiable
       description: 检查是否有没有关联工单号的 TODO
       target: "src/**/*.{ts,tsx}"
       pattern: "TODO(?!.*JIRA|.*#)"
