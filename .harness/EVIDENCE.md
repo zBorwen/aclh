@@ -1,78 +1,91 @@
-# ACLH Evidence Model v1.1
+# ACLH Evidence & Review Trust Model v1.3
 
-Evidence turns a claimed machine check into a recorded execution result that is bound to the repository state it verified.
+P1 separates objective machine evidence from semantic review. A claim is not considered independently reviewed merely because the builder answered its own checklist.
 
-## Scope
+## 1. Machine evidence
 
-v1.1 supports three required repository gates:
+Three canonical gates are required:
 
-| Gate | Command | Required before push |
-|---|---|---|
-| `check` | `npm run check` | yes |
-| `typecheck` | `npm run typecheck` | yes |
-| `test` | `npm test` | yes |
+| Gate | Canonical command | Local pre-push | CI verifier |
+|---|---|---:|---:|
+| `check` | `npm run check` | required | required |
+| `typecheck` | `npm run typecheck` | required | required |
+| `test` | `npm test` | required | required |
 
-Each initialized task owns `docs/wip/<TASK_ID>/evidence.json`.
+Local task evidence lives at `docs/wip/<TASK_ID>/evidence.json` (schema 1.1). Every PASS is bound to the current `commit_sha` plus a `worktree_sha256` fingerprint. Repository changes make prior evidence stale.
 
-## Freshness model
+GitHub Actions independently reruns the canonical gates through `.harness/scripts/ci-evidence.ts`. It does not trust local evidence and uploads `.harness/artifacts/ci-evidence.json` with GitHub-provided repository/run provenance.
 
-Every gate is bound to two repository identifiers:
+## 2. Builder self-review
 
-- `commit_sha`: the current `git rev-parse HEAD` value.
-- `worktree_sha256`: a SHA-256 fingerprint of tracked changes plus untracked file contents.
+`.harness/scripts/self-review.ts` remains a useful adversarial checklist for the builder. It verifies task artifacts and requires explicit answers to Q1-Q10. It is **not independent evidence** and cannot satisfy the independent-review gate by itself.
 
-The task's own `evidence.json` is excluded from the worktree fingerprint so recording evidence does not invalidate itself.
+## 3. Independent semantic review
 
-A gate is fresh only when its recorded repository snapshot exactly matches the current repository snapshot. Therefore any later commit, staged change, unstaged change, or untracked-file content change invalidates previously recorded PASS evidence.
+P1 requires a second review context before task delivery:
 
-The recorder snapshots the repository both before and after running a gate. If the gate itself mutates repository state, the evidence is recorded as `FAIL` even when the command exits with code 0.
+```bash
+node .harness/scripts/independent-review.ts JIRA-101 --prepare
+```
 
-## Record shape
+This creates `docs/wip/JIRA-101/review-packet.md` containing the task artifacts and exact repository snapshot. The packet must be reviewed either by:
+
+- a **fresh Codex context** that did not build the change; or
+- a human reviewer.
+
+The reviewer records `docs/wip/JIRA-101/independent-review.json` with schema 1.0:
 
 ```json
 {
-  "version": "1.1",
+  "version": "1.0",
   "task_id": "JIRA-101",
-  "updated_at": "2026-08-19T00:00:00.000Z",
-  "gates": {
-    "typecheck": {
-      "gate": "typecheck",
-      "command": "npm run typecheck",
-      "started_at": "...",
-      "finished_at": "...",
-      "exit_code": 0,
-      "result": "PASS",
-      "repository": {
-        "commit_sha": "0123456789abcdef...",
-        "worktree_sha256": "abcdef012345..."
-      },
-      "repository_unchanged": true
-    }
-  }
+  "builder": { "session_id": "builder-session" },
+  "reviewer": { "kind": "codex-fresh-context", "session_id": "review-session" },
+  "repository": {
+    "commit_sha": "0123456789abcdef...",
+    "worktree_sha256": "..."
+  },
+  "reviewed_at": "2026-08-19T00:00:00.000Z",
+  "verdict": "PASS",
+  "findings": [],
+  "notes": "Acceptance criteria, regressions, root cause and tests reviewed."
 }
 ```
 
-## Commands
+Then run:
 
 ```bash
-npm run evidence -- JIRA-101 --gate check
-npm run evidence -- JIRA-101 --gate typecheck
-npm run evidence -- JIRA-101 --gate test
-npm run evidence -- JIRA-101 --verify
+node .harness/scripts/independent-review.ts JIRA-101 --verify
 ```
 
-`--gate` executes the canonical command, confirms the repository did not change during execution, and records the result plus repository snapshot.
+Verification blocks when the record is missing, stale, rejected, malformed, uses an unsupported reviewer kind, or declares the same builder/reviewer session id.
 
-`--verify` does not rerun commands. It requires all three gates to contain PASS evidence for the exact current repository snapshot. Stale evidence blocks verification.
+### Trust boundary
 
-## Upgrade from v1.0
+ACLH can enforce the **protocol** (separate record, distinct declared session ids, PASS verdict, exact repository snapshot), but a repository-only tool cannot cryptographically prove that two Codex session IDs truly represent isolated model contexts. Therefore P1 does not claim cryptographic reviewer independence. A human review or an external orchestrator can provide a stronger identity boundary later.
 
-v1.0 records do not contain repository identity and therefore cannot prove freshness. When v1.1 reads a v1.0 evidence file, all prior gate results are discarded and must be recaptured.
+## 4. Delivery order
 
-## Trust boundary
+The local completion sequence is:
 
-v1.1 closes the stale-evidence gap, but it is still **repository-local execution evidence**, not tamper-proof attestation. A repository writer can edit both code and `evidence.json`.
+```text
+fresh machine evidence
+  → builder adversarial self-review
+  → fresh-context/human independent review
+  → human delivery/review
+```
 
-The model now proves that the Harness-recorded gate result corresponds to a specific local repository snapshot. It does not yet prove who executed the command, which CI runner executed it, or that the JSON itself was not manually forged.
+The pre-push hook enforces these three local gates in that order when installed. CI separately enforces objective machine gates and provenance.
 
-Later P1 work may add CI provenance, verifier identity, output digests, and signed or server-side attestations.
+## P1 completion boundary
+
+P1 includes:
+
+1. real execution evidence for check/typecheck/test;
+2. commit + worktree freshness;
+3. evidence-backed blocking;
+4. independent GitHub Actions provenance;
+5. builder self-review kept distinct from independent semantic review;
+6. a fresh-context/human review protocol bound to the exact repository snapshot.
+
+P1 does not include Semgrep, AST/dependency analysis, cryptographic reviewer identity, signed attestations, dashboards, or knowledge retrieval.

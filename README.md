@@ -8,50 +8,55 @@
 
 ## 目录结构
 
-```
+```text
 .
-├── AGENTS.md                  # Codex 最高约束：治理层 + 行为层（全英文）
-├── HARNESS_ANALYSIS.md        # 架构深度分析文档（中文）
+├── AGENTS.md                  # Codex 最高约束：治理层 + 行为层
+├── HARNESS_ANALYSIS.md        # 架构深度分析文档（静态图后续统一更新）
 ├── .harness/
-│   ├── harness.yaml           # 配置中心：preset 预设 / 插件装配
-│   ├── ENFORCEMENT.md         # advisory / verifiable / blocking 强制等级契约
-│   ├── EVIDENCE.md            # P1 机器执行证据模型
+│   ├── harness.yaml           # preset / 插件装配
+│   ├── ENFORCEMENT.md         # advisory / verifiable / blocking 契约
+│   ├── EVIDENCE.md            # P1 Evidence Model + trust boundary
 │   ├── plugins/
-│   │   ├── rules/             # 规范插件（naming / react / typescript-strict）
-│   │   ├── process/           # 流程插件（full-lifecycle / tdd-workflow / pr-review / testing-only）
-│   │   └── templates/         # 模板插件（spec / task-tdd / bug-entry）
-│   ├── project/               # 项目知识资产（profile / architecture / bug-ledger / gotchas / decisions / dev-notes）
-│   ├── scripts/               # check.ts / init-task.ts / evidence.ts / self-review.ts
-│   └── hooks/                 # pre-commit.sh / pre-push.sh（Git 钩子，需手动安装）
-├── docs/wip/                  # 任务工作区（按任务 ID 隔离，含 evidence.json）
+│   │   ├── rules/
+│   │   ├── process/
+│   │   └── templates/
+│   ├── project/
+│   ├── scripts/
+│   │   ├── check.ts
+│   │   ├── init-task.ts
+│   │   ├── evidence.ts        # 本地 task evidence
+│   │   ├── ci-evidence.ts     # GitHub Actions 独立 evidence verifier
+│   │   └── self-review.ts
+│   └── hooks/
+├── docs/wip/                  # task workspace + evidence.json
 └── diagrams/                  # 静态架构图，阶段稳定后统一更新
 ```
 
 ## 当前 Agent 适配范围
 
-- **Supported:** OpenAI Codex（通过 `AGENTS.md` + `.harness/`）
-- **Not supported for now:** Cursor、GitHub Copilot、Claude Code 等专用入口
-- 当前阶段优先把 Codex 的治理、门禁和证据链跑通；其他 Agent 适配等核心模型稳定后再评估。
+- **Supported:** OpenAI Codex（`AGENTS.md` + `.harness/`）
+- **Not supported for now:** Cursor、GitHub Copilot、Claude Code 专用入口
+- 当前优先稳定 Codex 的治理、门禁和证据链，其他 Agent 后续再评估。
 
-## 核心机制（30 秒版）
+## 核心机制
 
-- **双环验证**：内环（TDD：RED → GREEN → REFACTOR + 机器门禁）由 AI 自闭环；外环（人工审查）由人把关，拒绝必须"先转测试再修复"。
-- **对抗式自检**：任务完成后、提交人工审查前，必须运行 `self-review.ts` 主动质问自己"遗漏了什么 / 忽略了什么"，缺口清零才能提交。
-- **机器证据**：`evidence.ts` 真实执行 `check / typecheck / test`，并把 PASS 绑定到当前 `HEAD SHA + worktree SHA-256`；代码一旦变化，旧证据立即失效。
-- **知识飞轮**：人工审查拒绝→修复→自动沉淀进 bug-ledger → 后续任务编码前强制读取 → 不再犯同类错误。
-- **预设装配**：`harness.yaml` 按任务类型选择 preset（full-lifecycle / testing-only / maintenance / quick-start），决定当前激活哪些规则、流程、模板。
+- **双环验证**：内环由 Codex + TDD + machine gates 闭环；外环由人工 review 把关。
+- **对抗式自检**：提交人工审查前运行 `self-review.ts`，主动检查遗漏、假设、影响范围和根因。
+- **本地机器证据**：`evidence.ts` 执行 `check / typecheck / test`，把 PASS 绑定到 `HEAD SHA + worktree SHA-256`；代码变化后旧证据立即 stale。
+- **独立 CI 证据**：`ci-evidence.ts` 在 GitHub Actions 内独立重跑相同 canonical gates，记录 GitHub run provenance，并上传 CI evidence artifact；不会信任 task-local `evidence.json`。
+- **知识飞轮**：人工 review 的失败和经验进入 bug-ledger / gotchas，供后续任务使用。
+- **预设装配**：`harness.yaml` 根据任务类型选择 preset，加载相应规则、流程和模板。
 
-## 快速开始（本地）
+## 快速开始
 
 ```bash
-# 环境要求：Node.js >= 22（原生运行 .ts，无需 tsx/ts-node）
 npm install
 npm run typecheck
 
 node .harness/scripts/check.ts
 node .harness/scripts/init-task.ts JIRA-101
 
-# P1 Evidence Model v1.1：执行真实 gate 并绑定当前仓库快照
+# Local Evidence
 npm run evidence -- JIRA-101 --gate check
 npm run evidence -- JIRA-101 --gate typecheck
 npm run evidence -- JIRA-101 --gate test
@@ -60,35 +65,38 @@ npm run evidence -- JIRA-101 --verify
 node .harness/scripts/self-review.ts JIRA-101
 ```
 
-## 设计决策与注意事项（开发记录）
+GitHub Actions 的 `Harness CI` 会独立执行同样的 `check / typecheck / test`，并上传 `.harness/artifacts/ci-evidence.json` 作为 workflow artifact。
 
-1. **配置模板初始为空**：`project/*.yaml` 是模板形态（profile/architecture 等未填），因为模板无法预知真实项目形态。接入真实项目时必须先填充 profile / architecture / commands。
-2. **AGENTS.md 分三层**：治理层（流程轨道）＋行为层（先读后写、第一性原理、最小变更）＋边界层（约束方式不约束创造力）。
-3. **第一性原理优先**：修 bug / 做需求时禁止默认沿现有实现打补丁；根治优先，无法一次根治时必须记录终态方向。
-4. **任务提交双门禁**：`evidence.ts --verify` → `self-review.ts` → 人工审查。机器证据先证明客观 gate，再进行对抗式 reasoning review。
-5. **Evidence v1.1 新鲜度**：每条证据绑定 commit SHA 和工作区内容指纹。任何后续 commit、staged/unstaged 修改或未跟踪文件内容变化都会使证据 stale。`evidence.json` 自身不参与指纹，避免自我失效。
-6. **Evidence 信任边界**：当前仍是仓库本地记录，不是防篡改 attestation；后续再增加 CI provenance、verifier identity、输出摘要或签名证据。
-7. **Semgrep 尚未接入**：当前静态规则引擎仍是 ACLH 自有的 filename/grep 等轻量检查；Semgrep 留到后续 Check Engine 增强阶段。
-8. **hooks 当前未安装**：`.harness/hooks/` 的 pre-commit / pre-push 需要手动安装；真实项目建议接 CI required check 或统一 hook manager。
-9. **scripts 全部使用 TypeScript**：Node ≥ 22 原生 type-stripping 直接执行，`tsconfig.json` 开启 `erasableSyntaxOnly`。
-10. **静态架构图延后更新**：等 P1/P2 核心模型阶段性稳定后统一刷新，避免每个小阶段反复维护静态图。
-11. **当前只适配 Codex**：暂不维护 Cursor、Copilot、Claude Code 等专用入口。
+## P1 Evidence Layer
 
-## 接入真实项目指南（推荐顺序）
+P1 按以下顺序完成：
 
-1. 初始化上下文：填充 `project/profile.yaml` 与 `project/architecture.yaml`，选择匹配 preset。
-2. 初始化任务：`init-task.ts` 创建 WIP 目录和 Evidence v1.1 文件。
-3. 开发与验证：完成实现后使用 `evidence.ts` 真实执行 `check / typecheck / test`。
-4. 若代码发生任何修改，重新执行三项 gate；旧证据不能复用。
-5. 提交前验证：`evidence.ts --verify` → `self-review.ts` → 人工审查。
-6. 将真实 Bug / Review 教训写入 `bug-ledger.yaml` / `gotchas.yaml`。
+1. **Execution evidence**：真实执行 canonical command，记录时间、exit code、PASS/FAIL。
+2. **Freshness binding**：证据绑定 commit SHA + worktree fingerprint，防止修改代码后复用旧 PASS。
+3. **Evidence-backed blocking**：`check / typecheck / test` 成为任务交付前的 blocking workflow gates。
+4. **Independent CI provenance**：GitHub Actions 不消费本地 evidence，而是独立执行 gates 并记录 repository / commit / run / workflow / actor provenance。
 
-## 当前状态（截至 2026-08）
+P1 到这里结束。详细信任边界见 `.harness/EVIDENCE.md`。
+
+## 设计决策与注意事项
+
+1. **配置模板初始为空**：真实项目接入时先填 `project/profile.yaml`、`architecture.yaml` 和项目命令。
+2. **AGENTS.md 是当前唯一 Agent contract**：只适配 Codex，避免过早承担多 Agent 兼容成本。
+3. **第一性原理优先**：优先根因修复；无法一次根治时要记录明确终态。
+4. **任务提交双门禁**：fresh local evidence → adversarial self-review → human review。
+5. **Local Evidence 不是独立 attestation**：仓库写入者可以编辑 `evidence.json`，因此只作为本地工作流证据。
+6. **CI Evidence 与 Local Evidence 分离**：CI 使用 GitHub Actions 环境提供的 provenance 独立生成 artifact，不接受本地 JSON 作为可信输入。
+7. **Branch protection 是仓库管理设置**：若要在 GitHub 层阻止 failing PR merge，应将 `Harness CI / verify` 配置为 required check；Harness 本身负责确定性的非零失败语义。
+8. **Semgrep 尚未接入**：当前仍使用 ACLH 自有轻量 check engine；不插入 P1 范围。
+9. **Git hooks 仍是本地快速反馈层**：真实项目建议结合 GitHub required checks，而不是把 hook 当最终可信边界。
+10. **静态架构图延后统一更新**：等后续核心模型稳定后一次性刷新。
+
+## 当前状态（2026-08）
 
 - Agent 适配：Codex only
-- P0 enforcement：最小 direct-blocking 规则已冻结
-- P1 Evidence Model：v1.1 已绑定 commit + worktree fingerprint
-- P1 workflow blocking：check / typecheck / test 需要 fresh PASS evidence
-- Semgrep：尚未接入
-- Git hooks：未安装（本地开发阶段）
-- 静态架构图：待核心模型阶段性稳定后统一更新
+- P0：完成
+- P1 Evidence Layer：**完成**
+- Local evidence：execution + freshness + blocking
+- CI evidence：independent GitHub Actions provenance + artifact
+- Semgrep：未接入
+- 静态架构图：暂未更新
