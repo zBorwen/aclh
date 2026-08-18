@@ -3,11 +3,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// ============================================================================
-// ACLH Task Initializer (TypeScript, runs natively on Node >= 22 via type stripping)
-// Usage: node .harness/scripts/init-task.ts <TASK_ID>
-// ============================================================================
-
 interface TemplateRef {
   src: string;
   dest: string;
@@ -21,7 +16,7 @@ const DOCS_DIR: string = path.join(ROOT_DIR, 'docs/wip');
 
 const taskId: string | undefined = process.argv[2];
 if (!taskId) {
-  console.error("Usage: node .harness/scripts/init-task.ts <TASK_ID>");
+  console.error('Usage: node .harness/scripts/init-task.ts <TASK_ID>');
   process.exit(1);
 }
 
@@ -45,11 +40,9 @@ if (fs.existsSync(taskDir)) {
 fs.mkdirSync(taskDir, { recursive: true });
 
 const createdFiles: string[] = [];
-
-// Copy templates
 const templates: TemplateRef[] = [
   { src: 'spec.md', dest: 'spec.md' },
-  { src: 'task-tdd.md', dest: 'tasks.md' }
+  { src: 'task-tdd.md', dest: 'tasks.md' },
 ];
 
 for (const t of templates) {
@@ -58,13 +51,11 @@ for (const t of templates) {
   if (fs.existsSync(srcPath)) {
     fs.copyFileSync(srcPath, destPath);
   } else {
-    // Create empty if template doesn't exist
     fs.writeFileSync(destPath, `# ${t.dest}\n`);
   }
   createdFiles.push(t.dest);
 }
 
-// Copy test-plan.md from template
 const testPlanSrc = path.join(HARNESS_DIR, 'plugins/templates', 'test-plan.md');
 if (fs.existsSync(testPlanSrc)) {
   fs.copyFileSync(testPlanSrc, path.join(taskDir, 'test-plan.md'));
@@ -73,33 +64,37 @@ if (fs.existsSync(testPlanSrc)) {
 }
 createdFiles.push('test-plan.md');
 
-// Create changelog.md
-fs.writeFileSync(path.join(taskDir, 'changelog.md'), `# Changelog\n\n- ${new Date().toISOString().split('T')[0]}: Initialized task ${taskId}\n`);
+fs.writeFileSync(
+  path.join(taskDir, 'changelog.md'),
+  `# Changelog\n\n- ${new Date().toISOString().split('T')[0]}: Initialized task ${taskId}\n`,
+);
 createdFiles.push('changelog.md');
 
-// Create .state.yaml
 const templatePath = path.join(DOCS_DIR, '.state-template.yaml');
 if (fs.existsSync(templatePath)) {
   let stateContent: string = fs.readFileSync(templatePath, 'utf8');
   const now = new Date().toISOString();
   const today = now.split('T')[0];
   stateContent = `task_id: "${taskId}"\ncreated_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
-  // Replace dummy dates in template with today
   stateContent = stateContent.replace(/2023-10-25/g, today);
   fs.writeFileSync(path.join(taskDir, '.state.yaml'), stateContent);
 } else {
   const now = new Date().toISOString();
-  fs.writeFileSync(path.join(taskDir, '.state.yaml'), `task_id: "${taskId}"
-phase: "requirements"
-status: "active"
-created_at: "${now}"
-updated_at: "${now}"
-`);
+  fs.writeFileSync(
+    path.join(taskDir, '.state.yaml'),
+    `task_id: "${taskId}"\nphase: "requirements"\nstatus: "active"\ncreated_at: "${now}"\nupdated_at: "${now}"\n`,
+  );
 }
 createdFiles.push('.state.yaml');
 
+fs.writeFileSync(
+  path.join(taskDir, 'evidence.json'),
+  `${JSON.stringify({ version: '1.0', task_id: taskId, updated_at: null, gates: {} }, null, 2)}\n`,
+);
+createdFiles.push('evidence.json');
+
 console.log(`Task ${taskId} initialized successfully at docs/wip/${taskId}/`);
-console.log(`Files created:`);
+console.log('Files created:');
 for (const f of createdFiles) {
   console.log(`  - ${f}`);
 }
