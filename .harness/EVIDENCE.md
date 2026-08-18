@@ -1,58 +1,38 @@
-# ACLH Evidence Model v1.1
+# ACLH Evidence Model v1.2
 
-Evidence turns a claimed machine check into a recorded execution result that is bound to the repository state it verified.
+Evidence turns a claimed machine check into a recorded execution result. P1 uses two deliberately separate evidence channels:
 
-## Scope
+- **Local task evidence**: fast feedback for Codex and pre-push workflow enforcement.
+- **CI evidence**: independent GitHub Actions verification bound to server-provided run provenance.
 
-v1.1 supports three required repository gates:
+The two channels must not be treated as interchangeable.
 
-| Gate | Command | Required before push |
-|---|---|---|
-| `check` | `npm run check` | yes |
-| `typecheck` | `npm run typecheck` | yes |
-| `test` | `npm test` | yes |
+## Canonical gates
 
-Each initialized task owns `docs/wip/<TASK_ID>/evidence.json`.
+P1 supports three required repository gates:
 
-## Freshness model
+| Gate | Canonical command | Local pre-push | CI verifier |
+|---|---|---:|---:|
+| `check` | `npm run check` | required | required |
+| `typecheck` | `npm run typecheck` | required | required |
+| `test` | `npm test` | required | required |
 
-Every gate is bound to two repository identifiers:
+## Local task evidence
 
-- `commit_sha`: the current `git rev-parse HEAD` value.
-- `worktree_sha256`: a SHA-256 fingerprint of tracked changes plus untracked file contents.
+Each initialized task owns `docs/wip/<TASK_ID>/evidence.json` with schema version `1.1`.
 
-The task's own `evidence.json` is excluded from the worktree fingerprint so recording evidence does not invalidate itself.
+Every local gate is bound to:
 
-A gate is fresh only when its recorded repository snapshot exactly matches the current repository snapshot. Therefore any later commit, staged change, unstaged change, or untracked-file content change invalidates previously recorded PASS evidence.
+- `commit_sha`: current `git rev-parse HEAD`.
+- `worktree_sha256`: SHA-256 fingerprint of tracked changes plus untracked file contents.
 
-The recorder snapshots the repository both before and after running a gate. If the gate itself mutates repository state, the evidence is recorded as `FAIL` even when the command exits with code 0.
+The task's own `evidence.json` is excluded from the fingerprint so recording evidence does not invalidate itself.
 
-## Record shape
+A local gate is fresh only when its recorded repository snapshot exactly matches the current repository snapshot. Any later commit, staged change, unstaged change, or untracked-file content change invalidates prior PASS evidence.
 
-```json
-{
-  "version": "1.1",
-  "task_id": "JIRA-101",
-  "updated_at": "2026-08-19T00:00:00.000Z",
-  "gates": {
-    "typecheck": {
-      "gate": "typecheck",
-      "command": "npm run typecheck",
-      "started_at": "...",
-      "finished_at": "...",
-      "exit_code": 0,
-      "result": "PASS",
-      "repository": {
-        "commit_sha": "0123456789abcdef...",
-        "worktree_sha256": "abcdef012345..."
-      },
-      "repository_unchanged": true
-    }
-  }
-}
-```
+The recorder snapshots the repository before and after a gate. If the gate mutates repository state, the result is `FAIL` even when the command exits 0.
 
-## Commands
+### Local commands
 
 ```bash
 npm run evidence -- JIRA-101 --gate check
@@ -61,18 +41,65 @@ npm run evidence -- JIRA-101 --gate test
 npm run evidence -- JIRA-101 --verify
 ```
 
-`--gate` executes the canonical command, confirms the repository did not change during execution, and records the result plus repository snapshot.
+`--verify` requires all three gates to contain fresh PASS evidence for the exact current repository snapshot.
 
-`--verify` does not rerun commands. It requires all three gates to contain PASS evidence for the exact current repository snapshot. Stale evidence blocks verification.
+## CI evidence
 
-## Upgrade from v1.0
+`.harness/scripts/ci-evidence.ts` is a separate verifier that is intentionally restricted to GitHub Actions (`GITHUB_ACTIONS=true`). It does not consume or trust task-local `evidence.json` files.
 
-v1.0 records do not contain repository identity and therefore cannot prove freshness. When v1.1 reads a v1.0 evidence file, all prior gate results are discarded and must be recaptured.
+It independently executes all canonical gates and writes the generated artifact to:
 
-## Trust boundary
+```text
+.harness/artifacts/ci-evidence.json
+```
 
-v1.1 closes the stale-evidence gap, but it is still **repository-local execution evidence**, not tamper-proof attestation. A repository writer can edit both code and `evidence.json`.
+The file is ignored by Git and uploaded by `Harness CI` as a workflow artifact, so it is not committed back into the repository.
 
-The model now proves that the Harness-recorded gate result corresponds to a specific local repository snapshot. It does not yet prove who executed the command, which CI runner executed it, or that the JSON itself was not manually forged.
+CI evidence contains:
 
-Later P1 work may add CI provenance, verifier identity, output digests, and signed or server-side attestations.
+```json
+{
+  "version": "1.0",
+  "verifier": {
+    "kind": "github-actions",
+    "script": ".harness/scripts/ci-evidence.ts"
+  },
+  "provenance": {
+    "repository": "owner/repo",
+    "commit_sha": "0123456789abcdef...",
+    "run_id": "123456789",
+    "run_attempt": "1",
+    "workflow": "Harness CI",
+    "actor": "github-user",
+    "server_url": "https://github.com"
+  },
+  "result": "PASS",
+  "gates": {
+    "check": { "command": "npm run check", "exit_code": 0, "result": "PASS" },
+    "typecheck": { "command": "npm run typecheck", "exit_code": 0, "result": "PASS" },
+    "test": { "command": "npm test", "exit_code": 0, "result": "PASS" }
+  }
+}
+```
+
+The verifier records all gate results, writes the artifact even when one or more gates fail, and exits non-zero if any required gate fails. The workflow uploads the artifact with `if: always()` so failed verification still leaves inspectable evidence.
+
+## Trust model
+
+P1 establishes three distinct claims:
+
+1. **Execution**: the canonical command actually ran and produced an exit code.
+2. **Freshness**: local PASS evidence belongs to the exact repository snapshot that was checked.
+3. **Provenance separation**: CI evidence is generated by a GitHub Actions verifier using GitHub-provided run identity, not by trusting the task-local JSON written by Codex.
+
+Local evidence remains editable by a repository writer and is therefore not an independent attestation. CI evidence is stronger because it is produced inside the server-side workflow and stored as a workflow artifact, but ACLH does not claim cryptographic non-repudiation or signed attestations in P1.
+
+## Enforcement boundary
+
+The canonical `check`, `typecheck`, and `test` gates are **evidence-backed blocking workflow gates**.
+
+This does not automatically promote similarly named plugin checks. For example, `ts-typecheck` remains `verifiable` inside `check.ts` while `check.ts` only delegates that rule. The workflow-level `npm run typecheck` gate is blocking because ACLH actually executes it through the evidence verifier.
+
+## P1 completion boundary
+
+P1 intentionally stops at deterministic execution evidence, freshness, and independent CI provenance. It does **not** include Semgrep, AST/dependency analysis, semantic review-agent separation, signed attestations, dashboards, or knowledge retrieval. Those are later phases and should not be pulled into P1 retroactively.
