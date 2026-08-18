@@ -1,22 +1,9 @@
 version: "1.0"
 
-# Preset support
+# Select exactly one preset as the source of active plugins.
+# Keep task-specific deviations inside a dedicated preset instead of maintaining
+# a second, parallel `plugins:` configuration that can silently override it.
 preset: "full-lifecycle"
-
-# Manual plugin composition (if `plugins:` is specified, it overrides the preset entirely)
-plugins:
-  rules:
-    - naming-frontend
-    - react-patterns
-    - typescript-strict
-  process:
-    - tdd-workflow
-    - full-lifecycle
-    - pr-review
-  templates:
-    - task-tdd # -> task-tdd.md
-    - bug-entry # -> bug-entry.md
-    - spec # -> spec.md
 
 # Project data (project assets, always loaded)
 project:

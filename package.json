@@ -1,16 +1,21 @@
 {
   "name": "ai-coding-lifecycle-harness",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI coding lifecycle governance harness",
   "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "typecheck": "tsc --noEmit"
+    "test": "node --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "node .harness/scripts/check.ts"
   },
-  "keywords": [],
+  "keywords": [
+    "ai-coding",
+    "governance",
+    "guardrails"
+  ],
   "author": "",
   "license": "ISC",
   "type": "module",
