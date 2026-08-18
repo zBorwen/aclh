@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { parse as parseYaml } from 'yaml';
@@ -78,6 +79,58 @@ test('minimal TypeScript baseline blocks ts-ignore but keeps lint-dependent rule
     pattern: '@ts-ignore',
   });
   assert.equal(noAny?.enforcement, 'verifiable');
+});
+
+test('init-task creates an empty v1 evidence record', () => {
+  const taskId = `TEST-EVIDENCE-INIT-${process.pid}`;
+  const taskDir = path.join('docs/wip', taskId);
+  fs.rmSync(taskDir, { recursive: true, force: true });
+
+  try {
+    const result = run(['.harness/scripts/init-task.ts', taskId]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+
+    const evidence = JSON.parse(fs.readFileSync(path.join(taskDir, 'evidence.json'), 'utf8')) as {
+      version: string;
+      task_id: string;
+      updated_at: null;
+      gates: Record<string, unknown>;
+    };
+    assert.equal(evidence.version, '1.0');
+    assert.equal(evidence.task_id, taskId);
+    assert.equal(evidence.updated_at, null);
+    assert.deepEqual(evidence.gates, {});
+  } finally {
+    fs.rmSync(taskDir, { recursive: true, force: true });
+  }
+});
+
+test('evidence recorder captures a real gate and verify rejects incomplete evidence', () => {
+  const taskId = `TEST-EVIDENCE-GATE-${process.pid}`;
+  const taskDir = path.join('docs/wip', taskId);
+  fs.rmSync(taskDir, { recursive: true, force: true });
+
+  try {
+    const init = run(['.harness/scripts/init-task.ts', taskId]);
+    assert.equal(init.status, 0, init.stderr || init.stdout);
+
+    const record = run(['.harness/scripts/evidence.ts', taskId, '--gate', 'check']);
+    assert.equal(record.status, 0, record.stderr || record.stdout);
+
+    const evidence = JSON.parse(fs.readFileSync(path.join(taskDir, 'evidence.json'), 'utf8')) as {
+      gates: Record<string, { command: string; exit_code: number; result: string }>;
+    };
+    assert.equal(evidence.gates.check.command, 'npm run check');
+    assert.equal(evidence.gates.check.exit_code, 0);
+    assert.equal(evidence.gates.check.result, 'PASS');
+
+    const verify = run(['.harness/scripts/evidence.ts', taskId, '--verify']);
+    assert.notEqual(verify.status, 0);
+    assert.match(verify.stderr, /typecheck: missing or failing evidence/);
+    assert.match(verify.stderr, /test: missing or failing evidence/);
+  } finally {
+    fs.rmSync(taskDir, { recursive: true, force: true });
+  }
 });
 
 test('init-task rejects traversal-like task identifiers', () => {
