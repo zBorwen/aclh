@@ -81,7 +81,10 @@ const governance = loadRootYaml('.harness/governance.yaml') as {
 const maxItemsRaw = governance.knowledge_retrieval?.max_items_per_source;
 const maxItems = Number.isInteger(maxItemsRaw) && Number(maxItemsRaw) > 0 ? Number(maxItemsRaw) : 5;
 const rawScoring = governance.knowledge_retrieval?.scoring ?? {};
-const scoring: Record<string,number> = Object.fromEntries(Object.entries(rawScoring).filter(([,v])=>typeof v==='number'));
+const scoring: Record<string,number> = {};
+for (const [key,value] of Object.entries(rawScoring)) {
+  if (typeof value === 'number') scoring[key] = value;
+}
 
 const state = loadRootYaml(normalize(path.relative(ROOT,statePath))) as {
   identity?: { base_commit?: unknown };
