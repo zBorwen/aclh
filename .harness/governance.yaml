@@ -1,4 +1,4 @@
-version: "1.0"
+version: "1.1"
 
 # P2 risk-based governance. Higher levels only add constraints; they never weaken
 # lower-level deterministic machine checks.
@@ -29,3 +29,23 @@ risk_levels:
     independent_review: human
 
 default_risk_level: L2
+
+# Verification is task-dependent. TDD is one strategy, not a universal ritual.
+verification_strategies:
+  tdd:
+    description: "业务逻辑/缺陷修复：RED → GREEN → REFACTOR"
+    required_markers: [RED, GREEN, REFACTOR]
+  component:
+    description: "UI/组件：component test + interaction/smoke verification"
+    required_markers: [COMPONENT_TEST, INTERACTION_CHECK]
+  config:
+    description: "配置/基础设施：schema validation + smoke verification"
+    required_markers: [SCHEMA_VALIDATION, SMOKE_TEST]
+  migration:
+    description: "迁移/兼容性：before/after compatibility + rollback check"
+    required_markers: [COMPATIBILITY_CHECK, ROLLBACK_CHECK]
+  docs:
+    description: "文档：structure/link/example validation"
+    required_markers: [DOC_STRUCTURE, LINK_OR_EXAMPLE_CHECK]
+
+default_verification_strategy: tdd
