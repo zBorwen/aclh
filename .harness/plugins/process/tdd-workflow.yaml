@@ -1,64 +1,46 @@
 plugin:
   name: tdd-workflow
   type: process
-  version: 1.0.0
-  description: 测试驱动开发双循环工作流 (TDD Dual-Loop Workflow)
-  tags:
-    - process
-    - tdd
-    - core
+  version: 1.1.0
+  description: 当 verification_strategy=tdd 时使用的测试驱动开发循环
+  tags: [process, tdd]
+
+applicability:
+  verification_strategy: tdd
+  note: "P2 中 TDD 不再是所有任务的通用流程；仅对声明 tdd strategy 的任务生效。"
 
 workflow:
   inner_loop:
-    description: TDD 核心开发循环 (TDD Core Loop)
+    description: TDD 核心开发循环
     steps:
       - name: RED
-        action: write failing test # 编写一个会失败的测试
-        gate: test must fail for the RIGHT reason # 必须确保测试是因为功能未实现而失败，而不是语法错误或配置问题
+        action: write failing test
+        gate: test must fail for the RIGHT reason
       - name: GREEN
-        action: write minimal implementation # 编写刚好能让测试通过的最简实现代码
-        gate: must not modify tests to fit # 绝对不允许为了让测试通过而去修改测试用例
+        action: write minimal implementation
+        gate: must not modify tests merely to fit implementation
       - name: REFACTOR
-        action: clean up # 重构代码，优化设计
-        gate: test count must not decrease # 重构后测试数量不能减少，且必须全部通过
+        action: clean up only when useful
+        gate: regression protection must not weaken
 
-  outer_loop:
-    description: 人工代码审查循环 (Human Review Loop)
+  feedback_protocol:
+    description: 仅适用于 tdd strategy 的反馈修复协议
     steps:
-      - name: SELF-REVIEW
-        action: run adversarial self-review before submission # 提交前先运行对抗式自检
-        tool: node .harness/scripts/self-review.ts <TASK_ID> # 校验任务产物与状态，逐条回答质问清单
-        gate: no MISS items remain # 不允许留下缺失项；发现的缺口必须修复或记录到 .state.yaml 的 self_review 段
-      - name: SUBMIT
-        action: present to human # 提交给人进行审查
-        outcomes:
-          pass: mark task done, proceed # 通过：标记任务完成，继续下一步
-          reject: capture human feedback # 拒绝：记录反馈意见
-
-  human_feedback_protocol:
-    description: 处理人工审查反馈的流程规范 (Protocol for handling human feedback)
-    steps:
-      1: record feedback # 记录反馈内容
-      2: convert to failing test # 将反馈转换为一个失败的测试
-      3: confirm test fails for right reason # 确认测试由于该问题而失败
-      4: fix implementation # 修复代码实现
-      5: re-submit # 重新提交审查
+      1: record feedback
+      2: reproduce behavioral defect with a failing regression test when feasible
+      3: confirm failure reason
+      4: fix implementation
+      5: rerun evidence and review gates
     rules:
-      - MUST write test before fixing # 修复前必须先写测试
-      - MUST NOT skip RED # 不允许跳过 RED 阶段
-      - MUST record rejection in changelog # 必须在变更日志中记录被拒原因
+      - MUST NOT fabricate a RED state with syntax/configuration errors
+      - MUST record review rejection in changelog
 
-  bug_ledger_integration:
-    description: 自动同步到缺陷账本 (Auto-sync to bug ledger)
-    trigger: when human rejects and fix passes # 人工拒绝且随后修复通过后触发
-    action: auto-append to bug-ledger # 自动追加到 bug-ledger 文件中
+non_tdd_redirect:
+  component: "Use COMPONENT_TEST + INTERACTION_CHECK from test-plan.md"
+  config: "Use SCHEMA_VALIDATION + SMOKE_TEST from test-plan.md"
+  migration: "Use COMPATIBILITY_CHECK + ROLLBACK_CHECK from test-plan.md"
+  docs: "Use DOC_STRUCTURE + LINK_OR_EXAMPLE_CHECK from test-plan.md"
 
-  prohibited_actions:
-    - skip RED # 跳过失败测试阶段
-    - modify passing tests # 修改已经通过的测试来适应新代码
-    - use excessive mocks # 过度使用 mock
-    - ignore human feedback without test # 不写测试就直接响应人工反馈
-
-  required_before_implement:
-    - check bug-ledger for current module # 在实现前必须检查当前模块的 bug-ledger 记录
-    - check gotchas for current framework # 在实现前必须检查当前框架的常见陷阱 (gotchas)
+required_before_implement:
+  - generate relevant task context with context-select.ts when required by risk
+  - consult retrieved bug/gotcha/decision items relevant to the task
