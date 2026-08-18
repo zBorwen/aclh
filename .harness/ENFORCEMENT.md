@@ -18,25 +18,40 @@ ACLH distinguishes guidance from machine-enforced policy. Words such as **must**
 4. `eslint-delegate` is `verifiable` until ACLH actually executes the delegated command/rule and captures its result. Merely printing an instruction is not enforcement.
 5. A rule may be promoted from `advisory` → `verifiable` → `blocking` only when its verification is deterministic enough to avoid unacceptable false positives.
 
-## Current baseline
+## P0 minimal blocking baseline
+
+P0 intentionally keeps the blocking set small. A rule is blocking only when ACLH can determine the result directly without relying on semantic interpretation or an external tool that is not yet executed by the Harness.
 
 ### Blocking now
 
-- Component file naming under `src/components/**/*.tsx`.
-- Hook file naming under `src/hooks/**/*.ts`.
-- CSS file naming under `src/**/*.css`.
+- Component file naming under `src/components/**/*.tsx` must be PascalCase.
+- Hook file naming under `src/hooks/**/*.ts` must use the `useXxx` form.
+- CSS file naming under `src/**/*.css` must be kebab-case.
+- TypeScript source under `src/**/*.{ts,tsx}` must not contain `@ts-ignore`; use a documented `@ts-expect-error` when suppression is genuinely required.
 
-These are direct, deterministic `filename-pattern` checks executed by `check.ts`.
+These rules are direct `filename-pattern` or `grep-pattern` checks executed by `check.ts` and have low ambiguity.
 
 ### Verifiable now
 
-- ESLint/TypeScript delegated rules in `react-patterns` and `typescript-strict`.
+- TypeScript compiler verification (`tsc --noEmit`).
+- `@typescript-eslint/no-explicit-any` and unused-variable checks.
+- React Hooks ESLint rules.
 - PR hygiene scans for `console.log` and TODOs without a ticket.
 
-These are visible to the machine, but are deliberately non-blocking at this P0 stage. Delegated checks must not be called blocking until their external tool result is actually executed and captured.
+These remain non-blocking in P0 because ACLH either delegates them to an external tool or they can reasonably require project-specific policy. They are candidates for P1 evidence-backed promotion.
 
 ### Advisory now
 
 All other prose rules: TDD sequencing, root-fix preference, architecture guidance, React design preferences, state-management recommendations, review-process statements, and similar natural-language constraints.
 
-The next promotion step should focus on rules with objective evidence: typecheck/lint/test commands, dependency boundaries, changed-file scope, required task artifacts, and acceptance-criteria/test mapping.
+## Promotion rule
+
+Do not add blocking checks merely because a rule sounds important. Promote only when all of the following are true:
+
+1. the condition is objectively machine-detectable;
+2. the Harness actually performs the verification;
+3. false positives are acceptably low;
+4. failure has a clear remediation path;
+5. the repository explicitly opts into blocking behavior.
+
+P1 should add command evidence and then reconsider promotion of typecheck, lint, tests, dependency boundaries, and other objective gates.
