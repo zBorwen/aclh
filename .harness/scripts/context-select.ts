@@ -12,6 +12,9 @@ interface RankedEntry { score: number; reasons: string[]; entry: GenericEntry; }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
+const PROJECT_DIR = process.env.ACLH_PROJECT_DIR
+  ? path.resolve(ROOT, process.env.ACLH_PROJECT_DIR)
+  : path.join(ROOT, '.harness/project');
 const taskId = process.argv[2];
 const mode = process.argv[3] ?? '--generate';
 if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId) || !['--generate','--verify'].includes(mode)) {
@@ -30,10 +33,9 @@ function git(args: string[]): string {
   return result.stdout;
 }
 function arrayOfStrings(value: unknown): string[] { return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []; }
-function loadYaml(relative: string): any {
-  const file = path.join(ROOT, relative);
-  return fs.existsSync(file) ? parseYaml(fs.readFileSync(file, 'utf8')) : {};
-}
+function loadYamlFile(file: string): any { return fs.existsSync(file) ? parseYaml(fs.readFileSync(file, 'utf8')) : {}; }
+function loadRootYaml(relative: string): any { return loadYamlFile(path.join(ROOT, relative)); }
+function loadProjectYaml(name: string): any { return loadYamlFile(path.join(PROJECT_DIR, name)); }
 function normalize(p: string): string { return p.replaceAll('\\','/').replace(/^\.\//,''); }
 function changedFiles(baseCommit: string): string[] {
   const tracked = git(['diff','--name-only',baseCommit,'--']).split('\n').filter(Boolean).map(normalize);
@@ -73,7 +75,7 @@ function rankedTopK(entries: unknown, modules: Set<string>, tags: Set<string>, f
   return {items:ranked.slice(0,max),total_matches:ranked.length};
 }
 
-const governance = loadYaml('.harness/governance.yaml') as {
+const governance = loadRootYaml('.harness/governance.yaml') as {
   knowledge_retrieval?: { max_items_per_source?: unknown; scoring?: Record<string,unknown> };
 };
 const maxItemsRaw = governance.knowledge_retrieval?.max_items_per_source;
@@ -81,7 +83,7 @@ const maxItems = Number.isInteger(maxItemsRaw) && Number(maxItemsRaw) > 0 ? Numb
 const rawScoring = governance.knowledge_retrieval?.scoring ?? {};
 const scoring: Record<string,number> = Object.fromEntries(Object.entries(rawScoring).filter(([,v])=>typeof v==='number'));
 
-const state = loadYaml(normalize(path.relative(ROOT,statePath))) as {
+const state = loadRootYaml(normalize(path.relative(ROOT,statePath))) as {
   identity?: { base_commit?: unknown };
   context_scope?: { modules?: unknown; tags?: unknown; files?: unknown };
 };
@@ -95,7 +97,7 @@ try { changed = changedFiles(baseCommit); }
 catch (error) { console.error(`Context FAIL: ${(error as Error).message}`); process.exit(1); }
 const effectiveFiles = [...new Set([...changed,...explicitFiles])].sort();
 
-const architecture = loadYaml('.harness/project/architecture.yaml') as { modules?: unknown };
+const architecture = loadProjectYaml('architecture.yaml') as { modules?: unknown };
 const moduleDefs = Array.isArray(architecture.modules) ? architecture.modules as ModuleDef[] : [];
 const selectedNames = new Set(explicitModules);
 for (const mod of moduleDefs) {
@@ -112,9 +114,9 @@ const selectedModuleNames = new Set(selectedModules.map(mod=>String(mod.name)));
 const tagSet = new Set(tags);
 const fileSet = new Set(effectiveFiles);
 
-const bugLedger = loadYaml('.harness/project/bug-ledger.yaml');
-const gotchas = loadYaml('.harness/project/gotchas.yaml');
-const decisions = loadYaml('.harness/project/decisions.yaml');
+const bugLedger = loadProjectYaml('bug-ledger.yaml');
+const gotchas = loadProjectYaml('gotchas.yaml');
+const decisions = loadProjectYaml('decisions.yaml');
 const bugs = rankedTopK(bugLedger.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
 const gotchaEntries = rankedTopK(gotchas.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
 const decisionEntries = rankedTopK(decisions.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
@@ -140,7 +142,7 @@ const output = {
   basis:{base_commit:baseCommit,sha256:basis,changed_files:changed,explicit_scope:{modules:explicitModules,tags,files:explicitFiles}},
   retrieval:{max_items_per_source:maxItems,scoring},
   selected:{
-    profile:'.harness/project/profile.yaml',
+    profile:path.join(PROJECT_DIR,'profile.yaml').replaceAll('\\','/'),
     modules:selectedModules,
     knowledge:{bugs,gotchas:gotchaEntries,decisions:decisionEntries}
   }
