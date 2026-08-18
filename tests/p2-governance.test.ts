@@ -3,10 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
-function run(args: string[]) {
-  return spawnSync(process.execPath, args, { cwd: process.cwd(), encoding: 'utf8' });
+function run(args: string[], env?: NodeJS.ProcessEnv) {
+  return spawnSync(process.execPath, args, { cwd: process.cwd(), encoding: 'utf8', env: env ?? process.env });
 }
 function taskDir(taskId: string) { return path.join('docs/wip', taskId); }
 function cleanup(taskId: string) { fs.rmSync(taskDir(taskId), { recursive: true, force: true }); }
@@ -87,11 +87,9 @@ test('component strategy is recorded and requires component-specific verificatio
     assert.match(plan, /strategy: component/);
     assert.match(plan, /COMPONENT_TEST/);
     assert.match(plan, /INTERACTION_CHECK/);
-
     const incomplete = run(['.harness/scripts/verification-plan.ts', taskId]);
     assert.notEqual(incomplete.status, 0);
     assert.match(incomplete.stderr, /COMPONENT_TEST/);
-
     fs.writeFileSync(planPath, plan.replaceAll('- [ ] COMPONENT_TEST:', '- [x] COMPONENT_TEST:').replaceAll('- [ ] INTERACTION_CHECK:', '- [x] INTERACTION_CHECK:'));
     const complete = run(['.harness/scripts/verification-plan.ts', taskId]);
     assert.equal(complete.status, 0, complete.stderr || complete.stdout);
@@ -118,4 +116,40 @@ test('init-task rejects unknown verification strategies', () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Invalid verification strategy/);
   cleanup(taskId);
+});
+
+test('task identity is bound to the current branch and base commit', () => {
+  const taskId = `TEST-P2-IDENTITY-${process.pid}`;
+  cleanup(taskId);
+  try {
+    assert.equal(run(['.harness/scripts/init-task.ts', taskId, '--risk', 'L0']).status, 0);
+    const statePath = path.join(taskDir(taskId), '.state.yaml');
+    const state = parseYaml(fs.readFileSync(statePath, 'utf8')) as { identity: { branch: string; base_commit: string; pr_number: number | null } };
+    assert.ok(state.identity.branch.length > 0);
+    assert.match(state.identity.base_commit, /^[0-9a-f]{40}$/);
+    assert.equal(state.identity.pr_number, null);
+    const verify = run(['.harness/scripts/task-identity.ts', taskId, '--verify']);
+    assert.equal(verify.status, 0, verify.stderr || verify.stdout);
+
+    state.identity.branch = 'definitely-not-current-branch';
+    fs.writeFileSync(statePath, stringifyYaml(state));
+    const wrongBranch = run(['.harness/scripts/task-identity.ts', taskId, '--verify']);
+    assert.notEqual(wrongBranch.status, 0);
+    assert.match(wrongBranch.stderr, /task belongs to branch definitely-not-current-branch/);
+  } finally { cleanup(taskId); }
+});
+
+test('task identity supports explicit PR binding and validates PR context', () => {
+  const taskId = `TEST-P2-PR-${process.pid}`;
+  cleanup(taskId);
+  try {
+    assert.equal(run(['.harness/scripts/init-task.ts', taskId, '--risk', 'L0']).status, 0);
+    const bind = run(['.harness/scripts/task-identity.ts', taskId, '--bind-pr', '123']);
+    assert.equal(bind.status, 0, bind.stderr || bind.stdout);
+    const state = parseYaml(fs.readFileSync(path.join(taskDir(taskId), '.state.yaml'), 'utf8')) as { identity: { branch: string; pr_number: number } };
+    const env = { ...process.env, GITHUB_ACTIONS: 'true', GITHUB_HEAD_REF: state.identity.branch, GITHUB_REF: 'refs/pull/124/merge' };
+    const mismatch = run(['.harness/scripts/task-identity.ts', taskId, '--verify'], env);
+    assert.notEqual(mismatch.status, 0);
+    assert.match(mismatch.stderr, /task is bound to PR #123, CI is running for PR #124/);
+  } finally { cleanup(taskId); }
 });
