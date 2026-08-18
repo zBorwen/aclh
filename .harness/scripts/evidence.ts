@@ -44,10 +44,14 @@ function sameSnapshot(a:RepositorySnapshot,b:RepositorySnapshot):boolean{return 
 function loadEvidence(taskId:string,evidencePath:string):EvidenceFile{
   if(!fs.existsSync(evidencePath)) return {version:'1.1',task_id:taskId,updated_at:null,gates:{}};
   try{
-    const parsed=JSON.parse(fs.readFileSync(evidencePath,'utf8')) as EvidenceFile;
+    const parsed=JSON.parse(fs.readFileSync(evidencePath,'utf8')) as {version?:unknown;task_id?:unknown;updated_at?:unknown;gates?:unknown};
     if(parsed.task_id!==taskId||!parsed.gates||typeof parsed.gates!=='object') throw new Error('invalid evidence schema');
+    if(parsed.version==='1.0'){
+      console.error(`[Evidence] ${taskId}: v1.0 evidence is stale by definition; recapture all gates for v1.1`);
+      return {version:'1.1',task_id:taskId,updated_at:null,gates:{}};
+    }
     if(parsed.version!=='1.1') throw new Error(`unsupported evidence version: ${String(parsed.version)}`);
-    return parsed;
+    return parsed as EvidenceFile;
   }catch(error){console.error(`Invalid evidence file for ${taskId}: ${(error as Error).message}`);process.exit(1);}
 }
 function requiredGates(taskDir:string): { risk: RiskLevel; gates: GateName[] } {
