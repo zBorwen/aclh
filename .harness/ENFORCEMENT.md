@@ -31,15 +31,25 @@ These rules are direct `filename-pattern` or `grep-pattern` checks with low ambi
 
 ## P1 evidence-backed blocking gates
 
-At task delivery time, the following canonical commands are now blocking when verified through `.harness/scripts/evidence.ts`:
+The canonical workflow gates are:
 
 - `npm run check`
 - `npm run typecheck`
 - `npm test`
 
-A PASS is valid only when all three gates were executed successfully against the exact current repository snapshot. Evidence is bound to `HEAD` plus a worktree SHA-256 fingerprint. If code or untracked task content changes after a gate runs, that gate becomes stale and `evidence.ts <TASK_ID> --verify` fails.
+They are blocking in two separate contexts.
 
-This is intentionally separate from plugin-level `eslint-delegate` semantics. For example, `ts-typecheck` remains `verifiable` inside `check.ts`, while the canonical `npm run typecheck` command is a workflow-level blocking Evidence gate because ACLH actually executes and records it.
+### Local task delivery
+
+`.harness/scripts/evidence.ts` executes the commands and records task-local evidence. A PASS remains valid only while the recorded `HEAD` SHA and worktree SHA-256 fingerprint match the current repository state. Any later content change makes the evidence stale and causes `--verify` to fail.
+
+### GitHub Actions verification
+
+`.harness/scripts/ci-evidence.ts` independently executes the same canonical commands inside GitHub Actions. It does not consume task-local evidence. Its result is bound to GitHub-provided provenance (`repository`, `GITHUB_SHA`, run identity, workflow, actor) and is uploaded as a workflow artifact.
+
+This separation is intentional: local evidence is useful for fast Codex/pre-push feedback, while CI evidence is the independent server-side verification path.
+
+A repository should configure the `Harness CI / verify` check as required in branch protection when it wants GitHub to prevent merging a failing PR. ACLH supplies the deterministic workflow and non-zero failure semantics; repository protection settings remain an administrative repository concern.
 
 ## Verifiable but non-blocking checks
 
@@ -63,3 +73,7 @@ Do not add blocking checks merely because a rule sounds important. Promote only 
 4. false positives are acceptably low;
 5. failure has a clear remediation path;
 6. the repository explicitly opts into blocking behavior.
+
+## P1 completion boundary
+
+P1 completes the execution-evidence layer: canonical gate execution, local freshness, evidence-backed blocking, and independent CI provenance. Static-analysis engine expansion, Semgrep, dependency/AST policy, semantic reviewer separation, signed attestations, dashboards, and knowledge retrieval are outside P1.
