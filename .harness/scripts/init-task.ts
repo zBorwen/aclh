@@ -25,7 +25,18 @@ if (!taskId) {
   process.exit(1);
 }
 
-const taskDir: string = path.join(DOCS_DIR, taskId);
+if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId)) {
+  console.error(`Invalid task ID: ${taskId}`);
+  console.error('Task IDs may contain only letters, numbers, dots, underscores, and hyphens.');
+  process.exit(1);
+}
+
+const taskDir: string = path.resolve(DOCS_DIR, taskId);
+const relativeTaskDir: string = path.relative(DOCS_DIR, taskDir);
+if (relativeTaskDir.startsWith('..') || path.isAbsolute(relativeTaskDir)) {
+  console.error(`Invalid task path: ${taskId}`);
+  process.exit(1);
+}
 if (fs.existsSync(taskDir)) {
   console.warn(`[Warning] Task directory ${taskDir} already exists. Will not overwrite.`);
   process.exit(1);

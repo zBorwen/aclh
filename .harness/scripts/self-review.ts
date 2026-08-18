@@ -26,6 +26,14 @@ interface TaskState {
   self_review?: unknown;
 }
 
+interface SelfReviewRecord {
+  run_at?: unknown;
+  gaps_found?: unknown;
+  root_fix_tracked?: unknown;
+  notes?: unknown;
+  answers?: unknown;
+}
+
 interface CheckResult {
   level: 'OK' | 'WARN' | 'MISS';
   label: string;
@@ -55,7 +63,7 @@ const README_LINK = path.join(ROOT, 'AGENTS.md');
 const REQUIRED_FILES: string[] = ['spec.md', 'tasks.md', 'test-plan.md', 'changelog.md', '.state.yaml'];
 const VALID_PHASES: string[] = ['requirements', 'design', 'task', 'implement', 'testing', 'delivery'];
 const VALID_STATUSES: string[] = ['active', 'paused', 'blocked'];
-const MIN_REVIEW_ROUNDS: number = 1;
+const COMPLETION_PHASES: string[] = ['testing', 'delivery'];
 
 // Hostile questions: answer each deliberately before declaring the task done.
 const HOSTILE_QUESTIONS: string[] = [
@@ -104,6 +112,12 @@ function loadState(taskDir: string): TaskState | null {
   }
 }
 
+function hasRecordedSelfReview(state: TaskState | null): boolean {
+  if (!state || state.self_review === null || typeof state.self_review !== 'object') return false;
+  const record = state.self_review as SelfReviewRecord;
+  return typeof record.run_at === 'string' && record.run_at.trim().length > 0;
+}
+
 function reviewTask(taskId: string): ReviewReport {
   const taskDir = path.join(WIP, taskId);
   const checks: CheckResult[] = [];
@@ -135,15 +149,53 @@ function reviewTask(taskId: string): ReviewReport {
     push(phaseValid ? 'OK' : 'MISS', 'state:phase', phaseValid ? phase : `invalid phase "${phase}"`);
     push(statusValid ? 'OK' : 'MISS', 'state:status', statusValid ? status : `invalid status "${status}"`);
 
+    push(COMPLETION_PHASES.includes(phase) ? 'OK' : 'MISS', 'state:completion_phase',
+      COMPLETION_PHASES.includes(phase)
+        ? `self-review is allowed in ${phase}`
+        : `self-review is only allowed in ${COMPLETION_PHASES.join(' or ')} (current: ${phase || 'unset'})`);
+    push(status === 'active' ? 'OK' : 'MISS', 'state:active_status',
+      status === 'active' ? 'active' : `task must be active during self-review (current: ${status || 'unset'})`);
+
     const history = state.review_history;
     const rounds = Array.isArray(history) ? history.length : 0;
-    push(rounds >= MIN_REVIEW_ROUNDS ? 'OK' : 'WARN', 'state:review_history',
-      rounds >= MIN_REVIEW_ROUNDS ? `${rounds} round(s) recorded` : `no review round recorded (minimum ${MIN_REVIEW_ROUNDS})`);
+    push(Array.isArray(history) ? 'OK' : 'MISS', 'state:review_history',
+      Array.isArray(history) ? `${rounds} round(s) recorded` : 'review_history must be an array');
 
     const sr = state.self_review;
-    const hasSelfReview = sr !== undefined && sr !== null;
-    push(hasSelfReview ? 'OK' : 'WARN', 'state:self_review',
-      hasSelfReview ? 'recorded' : 'not recorded (run this script and save the outcome)');
+    const record: SelfReviewRecord | null = sr !== null && typeof sr === 'object'
+      ? sr as SelfReviewRecord
+      : null;
+    push(record ? 'OK' : 'MISS', 'state:self_review',
+      record ? 'record present' : 'self-review record is missing');
+
+    if (record) {
+      const runAt = typeof record.run_at === 'string' ? record.run_at.trim() : '';
+      const rootFix = typeof record.root_fix_tracked === 'string' ? record.root_fix_tracked.trim() : '';
+      const notes = typeof record.notes === 'string' ? record.notes.trim() : '';
+      push(runAt.length > 0 ? 'OK' : 'MISS', 'state:self_review.run_at',
+        runAt.length > 0 ? 'recorded' : 'missing run timestamp');
+      push(Array.isArray(record.gaps_found) ? 'OK' : 'MISS', 'state:self_review.gaps_found',
+        Array.isArray(record.gaps_found) ? `${record.gaps_found.length} gap(s) recorded` : 'must be an array');
+      push(rootFix.length > 0 ? 'OK' : 'MISS', 'state:self_review.root_fix_tracked',
+        rootFix.length > 0 ? 'recorded' : 'missing root-fix direction');
+      push(notes.length > 0 ? 'OK' : 'MISS', 'state:self_review.notes',
+        notes.length > 0 ? 'recorded' : 'missing review notes');
+
+      const answers = record.answers;
+      const answerMap: Record<string, unknown> | null = answers !== null && typeof answers === 'object'
+        ? answers as Record<string, unknown>
+        : null;
+      push(answerMap ? 'OK' : 'MISS', 'state:self_review.answers',
+        answerMap ? 'answer map present' : 'missing answers to hostile questions');
+      if (answerMap) {
+        for (let i = 1; i <= HOSTILE_QUESTIONS.length; i++) {
+          const answer = answerMap[`Q${i}`];
+          const answerText = typeof answer === 'string' ? answer.trim() : '';
+          push(answerText.length > 0 ? 'OK' : 'MISS', `state:self_review.answers.Q${i}`,
+            answerText.length > 0 ? 'answered' : 'missing answer');
+        }
+      }
+    }
   }
 
   // 3. Spec acceptance criteria present
@@ -185,7 +237,7 @@ function reviewTask(taskId: string): ReviewReport {
 
   return {
     task: taskId,
-    state: { phase, status, has_self_review: !!(state && state.self_review) },
+    state: { phase, status, has_self_review: hasRecordedSelfReview(state) },
     checks,
     questions,
     misses,
@@ -228,4 +280,4 @@ if (jsonOut) {
   }
 }
 
-process.exit(overallMisses > 0 ? 1 : 0);
+process.exit(overallMisses > 0 || overallWarnings > 0 ? 1 : 0);
