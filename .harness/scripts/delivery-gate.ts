@@ -42,6 +42,7 @@ function run(script: string, args: string[]): void {
 }
 
 console.log(`[Delivery] ${taskId}: applying risk ${risk}`);
+run('.harness/scripts/task-identity.ts', [taskId, '--verify']);
 run('.harness/scripts/verification-plan.ts', [taskId]);
 run('.harness/scripts/evidence.ts', [taskId, '--verify']);
 
