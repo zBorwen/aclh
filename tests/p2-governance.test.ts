@@ -19,7 +19,6 @@ test('L0 requires only the check evidence gate', () => {
     assert.equal(init.status, 0, init.stderr || init.stdout);
     const state = parseYaml(fs.readFileSync(path.join(taskDir(taskId), '.state.yaml'), 'utf8')) as { risk_level: string };
     assert.equal(state.risk_level, 'L0');
-
     const check = run(['.harness/scripts/evidence.ts', taskId, '--gate', 'check']);
     assert.equal(check.status, 0, check.stderr || check.stdout);
     const verify = run(['.harness/scripts/evidence.ts', taskId, '--verify']);
@@ -53,7 +52,6 @@ test('L3 independent review rejects a fresh Codex reviewer and requires human', 
     const commit = packet.match(/- commit: ([0-9a-f]{40})/)?.[1];
     const worktree = packet.match(/- worktree: ([0-9a-f]{64})/)?.[1];
     assert.ok(commit && worktree);
-
     fs.writeFileSync(path.join(taskDir(taskId), 'independent-review.json'), JSON.stringify({
       version: '1.0', task_id: taskId,
       reviewer: { kind: 'codex-fresh-context', session_id: 'reviewer-B' },
@@ -73,5 +71,51 @@ test('init-task rejects unknown risk levels', () => {
   const result = run(['.harness/scripts/init-task.ts', taskId, '--risk', 'L9']);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Invalid risk level/);
+  cleanup(taskId);
+});
+
+test('component strategy is recorded and requires component-specific verification markers', () => {
+  const taskId = `TEST-P2-COMPONENT-${process.pid}`;
+  cleanup(taskId);
+  try {
+    const init = run(['.harness/scripts/init-task.ts', taskId, '--risk', 'L1', '--strategy', 'component']);
+    assert.equal(init.status, 0, init.stderr || init.stdout);
+    const state = parseYaml(fs.readFileSync(path.join(taskDir(taskId), '.state.yaml'), 'utf8')) as { verification_strategy: string };
+    assert.equal(state.verification_strategy, 'component');
+    const planPath = path.join(taskDir(taskId), 'test-plan.md');
+    const plan = fs.readFileSync(planPath, 'utf8');
+    assert.match(plan, /strategy: component/);
+    assert.match(plan, /COMPONENT_TEST/);
+    assert.match(plan, /INTERACTION_CHECK/);
+
+    const incomplete = run(['.harness/scripts/verification-plan.ts', taskId]);
+    assert.notEqual(incomplete.status, 0);
+    assert.match(incomplete.stderr, /COMPONENT_TEST/);
+
+    fs.writeFileSync(planPath, plan.replaceAll('- [ ] COMPONENT_TEST:', '- [x] COMPONENT_TEST:').replaceAll('- [ ] INTERACTION_CHECK:', '- [x] INTERACTION_CHECK:'));
+    const complete = run(['.harness/scripts/verification-plan.ts', taskId]);
+    assert.equal(complete.status, 0, complete.stderr || complete.stdout);
+  } finally { cleanup(taskId); }
+});
+
+test('docs strategy does not inherit TDD markers', () => {
+  const taskId = `TEST-P2-DOCS-${process.pid}`;
+  cleanup(taskId);
+  try {
+    assert.equal(run(['.harness/scripts/init-task.ts', taskId, '--risk', 'L0', '--strategy', 'docs']).status, 0);
+    const plan = fs.readFileSync(path.join(taskDir(taskId), 'test-plan.md'), 'utf8');
+    assert.match(plan, /DOC_STRUCTURE/);
+    assert.match(plan, /LINK_OR_EXAMPLE_CHECK/);
+    assert.doesNotMatch(plan, /- \[ \] RED:/);
+    assert.doesNotMatch(plan, /- \[ \] GREEN:/);
+  } finally { cleanup(taskId); }
+});
+
+test('init-task rejects unknown verification strategies', () => {
+  const taskId = `TEST-P2-BAD-STRATEGY-${process.pid}`;
+  cleanup(taskId);
+  const result = run(['.harness/scripts/init-task.ts', taskId, '--strategy', 'magic']);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Invalid verification strategy/);
   cleanup(taskId);
 });
