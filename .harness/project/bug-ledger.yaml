@@ -1,24 +1,21 @@
-# Bug 知识账本：记录从 TDD 或人工代码审查中发现的 Bug
-# description: 详细记录 Bug 及其根因，指导后续防范。Bug 来源为 TDD 循环或 Code Review。
-# usage_instructions:
-#   1) 编码前：检查相关的历史 Bug 和预防规则
-#   2) 修复后：追加新的 Bug 记录
-#   3) PR Review：检查是否违反已有的预防规则
+# Bug 知识账本：记录从 TDD、Review、CI 或生产事故中沉淀的可复用教训。
+# P2 retrieval metadata: module/modules, tags, affected_files, severity。
 entries:
-  # 示例条目:
   # - id: "BUG-001"
-  #   date: "2023-10-25"
+  #   date: "2026-08-19"
   #   source: "human_review" # tdd | human_review | ci | production
   #   task: "JIRA-1234"
-  #   module: "UserAuth"
-  #   severity: "high" # low | medium | high | critical
+  #   module: "UserAuth"      # primary module; used by context retrieval
+  #   modules: ["UserAuth"]   # optional multi-module scope
+  #   tags: ["react", "auth", "api"]
+  #   severity: "high"        # low | medium | high | critical
   #   symptom: "用户登录后页面白屏"
-  #   error_signature: "TypeError: Cannot read properties of undefined (reading 'token')"
-  #   root_cause: "API 响应结构变更，少了一层 data 包装"
-  #   resolution: "更新 API 响应类型定义，并使用可选链操作符"
-  #   prevention_rule: "所有外部 API 调用必须有完整的类型校验和后备处理"
+  #   error_signature: "TypeError: Cannot read properties of undefined"
+  #   root_cause: "API 响应结构变化"
+  #   resolution: "更新响应类型并补边界处理"
+  #   prevention_rule: "外部 API 响应必须做类型与空值验证"
   #   affected_files: ["src/api/auth.ts", "src/store/user.ts"]
-  #   test_added: "添加了针对不完整 API 响应的单元测试"
-  #   lesson: "不要假设外部 API 总是返回约定的格式"
+  #   test_added: "不完整 API 响应回归测试"
+  #   lesson: "不要假设外部 API 永远满足约定"
   #   review_round: 1
   []
