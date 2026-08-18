@@ -115,15 +115,16 @@ const templatePath = path.join(DOCS_DIR, '.state-template.yaml');
 const now = new Date().toISOString();
 const today = now.split('T')[0];
 const identityBlock = `identity:\n  branch: "${branch.replaceAll('"', '\\"')}"\n  base_commit: "${baseCommit}"\n  pr_number: null\n`;
+const contextBlock = `context_scope:\n  modules: []\n  tags: []\n  files: []\n`;
 if (fs.existsSync(templatePath)) {
   let stateContent: string = fs.readFileSync(templatePath, 'utf8');
-  stateContent = `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\n${identityBlock}created_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
+  stateContent = `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\n${identityBlock}${contextBlock}created_at: "${now}"\nupdated_at: "${now}"\n` + stateContent;
   stateContent = stateContent.replace(/2023-10-25/g, today);
   fs.writeFileSync(path.join(taskDir, '.state.yaml'), stateContent);
 } else {
   fs.writeFileSync(
     path.join(taskDir, '.state.yaml'),
-    `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\n${identityBlock}phase: "requirements"\nstatus: "active"\ncreated_at: "${now}"\nupdated_at: "${now}"\n`,
+    `task_id: "${taskId}"\nrisk_level: "${riskLevel}"\nverification_strategy: "${verificationStrategy}"\n${identityBlock}${contextBlock}phase: "requirements"\nstatus: "active"\ncreated_at: "${now}"\nupdated_at: "${now}"\n`,
   );
 }
 createdFiles.push('.state.yaml');
