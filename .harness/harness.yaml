@@ -1,20 +1,22 @@
-version: "1.0"
+version: "1.1"
 
 # Select exactly one preset as the source of active plugins.
-# Keep task-specific deviations inside a dedicated preset instead of maintaining
-# a second, parallel `plugins:` configuration that can silently override it.
 preset: "full-lifecycle"
 
-# Project data (project assets, always loaded)
-project:
+# Project assets are retrieval candidates. P2 no longer loads all of them into
+# every task context. `context-select.ts` chooses task-relevant slices.
+project_assets:
   profile: true
   architecture: true
   dev-notes: true
   bug-ledger: true
   decisions: true
   gotchas: true
+context_selector: ".harness/scripts/context-select.ts"
+governance: ".harness/governance.yaml"
 
-# Preset definitions
+# Preset definitions. `project` lists allowed retrieval sources for the preset;
+# it does not mean eager/full-file context loading.
 presets:
   full-lifecycle:
     description: "正式业务项目开发（需求→交付）"
