@@ -1,12 +1,19 @@
 phase: "requirements" # requirements | design | task | implement | testing | delivery
 status: "active"      # active | paused | blocked
-review_history:
-  - round: 1
-    date: "2023-10-25"
-    reviewer: "AI-Assistant"
-    result: "changes_requested"
+review_history: []
 self_review:
   run_at: ""          # ISO date of the last adversarial self-review
   gaps_found: []      # list of gaps admitted during self-review (be honest)
   root_fix_tracked: "" # where the root-fix direction is recorded, e.g. "BUG-042" or "see tasks.md notes"
   notes: ""           # free-form follow-up notes
+  answers:
+    Q1: ""
+    Q2: ""
+    Q3: ""
+    Q4: ""
+    Q5: ""
+    Q6: ""
+    Q7: ""
+    Q8: ""
+    Q9: ""
+    Q10: ""
