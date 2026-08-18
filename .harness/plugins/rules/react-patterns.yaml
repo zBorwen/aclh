@@ -11,53 +11,37 @@ plugin:
     - architecture
     - patterns
 
+# Design guidance remains advisory until an executable check can verify it reliably.
 rules:
   preferred_patterns:
-    - custom hooks for logic extraction # 提取复杂逻辑到自定义 hook 中
-    - composition over inheritance # 组合优于继承
-    - controlled components # 使用受控组件管理表单状态
-    - error boundaries # 使用错误边界捕获渲染错误
-    - React.memo for expensive renders # 仅在渲染代价高时使用 React.memo
-    - useCallback/useMemo judiciously # 谨慎使用 useCallback/useMemo，避免过度优化
-  
+    - custom hooks for logic extraction
+    - composition over inheritance
+    - controlled components
+    - error boundaries
+    - React.memo for expensive renders
+    - useCallback/useMemo judiciously
   prohibited_patterns:
-    - direct DOM manipulation # 严禁直接操作 DOM
-    - inline styles for complex styling # 复杂样式不应使用内联样式
-    - prop drilling beyond 2 levels (use context/store) # 避免超过 2 层的 prop 传递，请使用 Context 或全局状态
-    - useEffect for derived state (use useMemo) # 不要用 useEffect 计算派生状态，应直接计算或使用 useMemo
-    - setState in render # 禁止在渲染阶段直接调用 setState
-    - string refs # 严禁使用过时的字符串 ref (如 ref="myRef")
-
+    - direct DOM manipulation
+    - inline styles for complex styling
+    - prop drilling beyond 2 levels (use context/store)
+    - useEffect for derived state (use useMemo)
+    - setState in render
+    - string refs
   state_management:
-    - local state for UI-only state # 仅涉及 UI 交互的状态使用本地状态 (useState)
-    - Zustand for cross-component/persistent state # 跨组件或需要持久化的状态推荐使用 Zustand
-    - URL params for navigation state # 导航状态尽量放在 URL 参数中
-
-  component_structure:
-    - recommended file structure within a component folder:
-      - ComponentName.tsx # 组件主文件
-      - ComponentName.test.tsx # 测试文件
-      - ComponentName.module.css # 样式文件
-      - index.ts # 导出文件
-      - types.ts # 类型定义 (可选)
-      - useComponentName.ts # 逻辑 hook (可选)
-
-examples:
-  - do: |
-      // 好的做法：直接在渲染时计算派生状态
-      const fullName = `${firstName} ${lastName}`;
-      return <div>{fullName}</div>;
-  - do_not: |
-      // 错误做法：使用 useEffect 更新派生状态
-      const [fullName, setFullName] = useState('');
-      useEffect(() => {
-        setFullName(`${firstName} ${lastName}`);
-      }, [firstName, lastName]);
+    - local state for UI-only state
+    - Zustand for cross-component/persistent state
+    - URL params for navigation state
 
 checks:
-  - type: eslint-delegate
+  - id: react-hooks-rules
+    type: eslint-delegate
+    enforcement: verifiable
     rule: react-hooks/rules-of-hooks
-  - type: eslint-delegate
+  - id: react-hooks-deps
+    type: eslint-delegate
+    enforcement: verifiable
     rule: react-hooks/exhaustive-deps
-  - type: eslint-delegate
+  - id: react-no-direct-mutation
+    type: eslint-delegate
+    enforcement: verifiable
     rule: no-direct-mutation
