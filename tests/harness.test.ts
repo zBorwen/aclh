@@ -63,7 +63,7 @@ test('minimal TypeScript baseline blocks ts-ignore but keeps lint-dependent rule
   const plugin = parseYaml(
     fs.readFileSync('.harness/plugins/rules/typescript-strict.yaml', 'utf8'),
   ) as {
-    checks: Array<{ id: string; type: string; enforcement: string }>;
+    checks: Array<Record<string, unknown>>;
   };
 
   const noIgnore = plugin.checks.find(check => check.id === 'ts-no-ignore');
@@ -81,7 +81,7 @@ test('minimal TypeScript baseline blocks ts-ignore but keeps lint-dependent rule
   assert.equal(noAny?.enforcement, 'verifiable');
 });
 
-test('init-task creates an empty v1 evidence record', () => {
+test('init-task creates an empty v1.1 evidence record', () => {
   const taskId = `TEST-EVIDENCE-INIT-${process.pid}`;
   const taskDir = path.join('docs/wip', taskId);
   fs.rmSync(taskDir, { recursive: true, force: true });
@@ -96,7 +96,7 @@ test('init-task creates an empty v1 evidence record', () => {
       updated_at: null;
       gates: Record<string, unknown>;
     };
-    assert.equal(evidence.version, '1.0');
+    assert.equal(evidence.version, '1.1');
     assert.equal(evidence.task_id, taskId);
     assert.equal(evidence.updated_at, null);
     assert.deepEqual(evidence.gates, {});
@@ -105,7 +105,7 @@ test('init-task creates an empty v1 evidence record', () => {
   }
 });
 
-test('evidence recorder captures a real gate and verify rejects incomplete evidence', () => {
+test('evidence recorder binds a real gate to the current repository snapshot', () => {
   const taskId = `TEST-EVIDENCE-GATE-${process.pid}`;
   const taskDir = path.join('docs/wip', taskId);
   fs.rmSync(taskDir, { recursive: true, force: true });
@@ -118,16 +118,87 @@ test('evidence recorder captures a real gate and verify rejects incomplete evide
     assert.equal(record.status, 0, record.stderr || record.stdout);
 
     const evidence = JSON.parse(fs.readFileSync(path.join(taskDir, 'evidence.json'), 'utf8')) as {
-      gates: Record<string, { command: string; exit_code: number; result: string }>;
+      version: string;
+      gates: Record<string, {
+        command: string;
+        exit_code: number;
+        result: string;
+        repository_unchanged: boolean;
+        repository: { commit_sha: string; worktree_sha256: string };
+      }>;
     };
+    assert.equal(evidence.version, '1.1');
     assert.equal(evidence.gates.check.command, 'npm run check');
     assert.equal(evidence.gates.check.exit_code, 0);
     assert.equal(evidence.gates.check.result, 'PASS');
+    assert.equal(evidence.gates.check.repository_unchanged, true);
+    assert.match(evidence.gates.check.repository.commit_sha, /^[0-9a-f]{40}$/);
+    assert.match(evidence.gates.check.repository.worktree_sha256, /^[0-9a-f]{64}$/);
 
     const verify = run(['.harness/scripts/evidence.ts', taskId, '--verify']);
     assert.notEqual(verify.status, 0);
+    assert.match(verify.stdout, /check: fresh PASS evidence present/);
     assert.match(verify.stderr, /typecheck: missing or failing evidence/);
     assert.match(verify.stderr, /test: missing or failing evidence/);
+  } finally {
+    fs.rmSync(taskDir, { recursive: true, force: true });
+  }
+});
+
+test('evidence becomes stale when repository content changes after a gate', () => {
+  const taskId = `TEST-EVIDENCE-STALE-${process.pid}`;
+  const taskDir = path.join('docs/wip', taskId);
+  fs.rmSync(taskDir, { recursive: true, force: true });
+
+  try {
+    const init = run(['.harness/scripts/init-task.ts', taskId]);
+    assert.equal(init.status, 0, init.stderr || init.stdout);
+
+    const record = run(['.harness/scripts/evidence.ts', taskId, '--gate', 'check']);
+    assert.equal(record.status, 0, record.stderr || record.stdout);
+
+    fs.appendFileSync(path.join(taskDir, 'changelog.md'), '- changed after evidence\n');
+
+    const verify = run(['.harness/scripts/evidence.ts', taskId, '--verify']);
+    assert.notEqual(verify.status, 0);
+    assert.match(verify.stderr, /check: stale evidence; repository changed after gate execution/);
+  } finally {
+    fs.rmSync(taskDir, { recursive: true, force: true });
+  }
+});
+
+test('v1.0 evidence cannot be reused as fresh v1.1 evidence', () => {
+  const taskId = `TEST-EVIDENCE-MIGRATION-${process.pid}`;
+  const taskDir = path.join('docs/wip', taskId);
+  fs.rmSync(taskDir, { recursive: true, force: true });
+
+  try {
+    const init = run(['.harness/scripts/init-task.ts', taskId]);
+    assert.equal(init.status, 0, init.stderr || init.stdout);
+
+    fs.writeFileSync(
+      path.join(taskDir, 'evidence.json'),
+      `${JSON.stringify({
+        version: '1.0',
+        task_id: taskId,
+        updated_at: new Date().toISOString(),
+        gates: {
+          check: {
+            gate: 'check',
+            command: 'npm run check',
+            started_at: '2026-08-19T00:00:00.000Z',
+            finished_at: '2026-08-19T00:00:01.000Z',
+            exit_code: 0,
+            result: 'PASS',
+          },
+        },
+      }, null, 2)}\n`,
+    );
+
+    const verify = run(['.harness/scripts/evidence.ts', taskId, '--verify']);
+    assert.notEqual(verify.status, 0);
+    assert.match(verify.stderr, /v1\.0 evidence is stale by definition/);
+    assert.match(verify.stderr, /check: missing or failing evidence/);
   } finally {
     fs.rmSync(taskDir, { recursive: true, force: true });
   }
