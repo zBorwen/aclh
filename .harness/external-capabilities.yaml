@@ -1,6 +1,6 @@
 version: "1.0"
 external_mode:
-  status: managed-snapshot-ready
+  status: resync-ready
   commands:
     init-task: supported
     classification: supported
@@ -15,3 +15,4 @@ external_mode:
     independent-review: supported
     delivery-gate: supported
     managed-snapshot: supported
+    resync: supported
