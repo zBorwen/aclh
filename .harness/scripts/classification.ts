@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadClassification } from './lib/classification-runtime.ts';
+import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
-const WIP = path.join(ROOT, 'docs/wip');
+const roots = resolveRuntimeRoots(import.meta.url);
+const WIP = roots.projectWipDir;
 
 const args = process.argv.slice(2);
 const taskId = args[0];
