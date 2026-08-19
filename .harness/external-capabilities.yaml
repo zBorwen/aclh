@@ -1,6 +1,6 @@
 version: "1.0"
 external_mode:
-  status: delivery-ready
+  status: managed-snapshot-ready
   commands:
     init-task: supported
     classification: supported
@@ -14,3 +14,4 @@ external_mode:
     self-review: supported
     independent-review: supported
     delivery-gate: supported
+    managed-snapshot: supported
