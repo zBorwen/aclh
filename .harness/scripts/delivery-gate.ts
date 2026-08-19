@@ -42,15 +42,30 @@ function run(script: string, args: string[]): void {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-console.log(`[Delivery] ${taskId}: applying risk ${risk}`);
+const hasSkillPlan = fs.existsSync(path.join(taskDir, 'skill-plan.yaml'));
+console.log(`[Delivery] ${taskId}: applying risk ${risk}${hasSkillPlan ? ' with P3 Skill Plan' : ' with P2 compatibility workflow'}`);
 run('.harness/scripts/task-identity.ts', [taskId, '--verify']);
-if (policy.context_required === true) {
+
+if (hasSkillPlan) {
+  // P3 Skill inputs/outputs are repository content. They must be finalized before
+  // Evidence freshness is verified, otherwise completing them would immediately
+  // invalidate the evidence snapshot.
+  run('.harness/scripts/classification.ts', [taskId, '--verify']);
+  run('.harness/scripts/skill-plan.ts', [taskId, '--verify']);
   run('.harness/scripts/context-select.ts', [taskId, '--verify']);
+  run('.harness/scripts/verification-plan.ts', [taskId]); // P2 compatibility layer during P3 v1.
+  run('.harness/scripts/skill-output.ts', [taskId, '--verify']);
+  run('.harness/scripts/evidence.ts', [taskId, '--verify']);
+  run('.harness/scripts/skill-evidence.ts', [taskId, '--verify']);
 } else {
-  console.log(`[Delivery] ${taskId}: fresh task context not required by risk ${risk}`);
+  if (policy.context_required === true) {
+    run('.harness/scripts/context-select.ts', [taskId, '--verify']);
+  } else {
+    console.log(`[Delivery] ${taskId}: fresh task context not required by risk ${risk}`);
+  }
+  run('.harness/scripts/verification-plan.ts', [taskId]);
+  run('.harness/scripts/evidence.ts', [taskId, '--verify']);
 }
-run('.harness/scripts/verification-plan.ts', [taskId]);
-run('.harness/scripts/evidence.ts', [taskId, '--verify']);
 
 if (policy.builder_self_review === true) {
   run('.harness/scripts/self-review.ts', [taskId]);
@@ -67,4 +82,4 @@ if (policy.independent_review === 'codex-or-human' || policy.independent_review 
   process.exit(1);
 }
 
-console.log(`[Delivery] ${taskId}: PASS for risk ${risk}`);
+console.log(`[Delivery] ${taskId}: PASS for risk ${risk}${hasSkillPlan ? ' / P3 Skill Plan' : ''}`);
