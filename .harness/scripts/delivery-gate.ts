@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parse as parseYaml } from 'yaml';
+import { loadResyncReport } from './lib/resync-runtime.ts';
 import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
 interface RiskPolicy {
@@ -58,6 +59,10 @@ run('task-identity.ts', [taskId, '--verify']);
 if (hasSkillPlan) {
   run('classification.ts', [taskId, '--verify']);
   run('skill-plan.ts', [taskId, '--verify']);
+  const resync = loadResyncReport(ROOT, taskId);
+  if (resync?.requirements.skill_plan_review === true) {
+    run('skill-replan.ts', [taskId, '--verify']);
+  }
   run('context-select.ts', [taskId, '--verify']);
   run('verification-plan.ts', [taskId]);
   run('skill-output.ts', [taskId, '--verify']);
