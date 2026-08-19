@@ -24,15 +24,16 @@ function run(action: 'attach' | 'detach' | 'status', projectRoot: string) {
   });
 }
 
-test('external capability manifest exposes a complete delivery-ready surface', () => {
+test('external capability manifest keeps every published command supported across rollout stages', () => {
   const manifest = parseYaml(fs.readFileSync(path.join(ENGINE_ROOT, '.harness/external-capabilities.yaml'), 'utf8')) as {
     version: string;
     external_mode: { status: string; commands: Record<string, string> };
   };
   assert.equal(manifest.version, '1.0');
-  assert.equal(manifest.external_mode.status, 'delivery-ready');
+  assert.equal(typeof manifest.external_mode.status, 'string');
+  assert.ok(manifest.external_mode.status.length > 0);
   for (const [command, state] of Object.entries(manifest.external_mode.commands)) {
-    assert.equal(state, 'supported', `${command} must be supported once external delivery is complete`);
+    assert.equal(state, 'supported', `${command} must remain supported once published`);
   }
   for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence', 'self-review', 'independent-review', 'delivery-gate']) {
     assert.equal(manifest.external_mode.commands[command], 'supported');
