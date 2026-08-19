@@ -14,9 +14,9 @@ function resolveConfiguredPath(value: string | undefined, fallback: string): str
   return path.resolve(value);
 }
 
-export function resolveRuntimeRoots(importMetaUrl: string): RuntimeRoots {
-  const scriptDir = path.dirname(fileURLToPath(importMetaUrl));
-  const defaultRuntimeRoot = path.resolve(scriptDir, '../../..');
+export function resolveRuntimeRoots(): RuntimeRoots {
+  const helperDir = path.dirname(fileURLToPath(import.meta.url));
+  const defaultRuntimeRoot = path.resolve(helperDir, '../../..');
   const runtimeRoot = resolveConfiguredPath(process.env.ACLH_RUNTIME_ROOT, defaultRuntimeRoot);
   const projectRoot = resolveConfiguredPath(process.env.ACLH_PROJECT_ROOT, runtimeRoot);
 
