@@ -1,0 +1,15 @@
+version: "1.0"
+external_mode:
+  status: bootstrap-only
+  commands:
+    init-task: supported
+    classification: supported
+    skill-plan: supported
+    context-select: pending
+    verification-plan: pending
+    skill-output: pending
+    evidence: pending
+    skill-evidence: pending
+    self-review: pending
+    independent-review: pending
+    delivery-gate: pending
