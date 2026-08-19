@@ -1,0 +1,30 @@
+skill:
+  id: change-impact-analysis
+  version: "1.0"
+  kind: understanding
+
+description: >
+  Identify repository modules, contracts and behaviors that may be affected by
+  a proposed change so implementation and verification scope are explicit.
+
+requires:
+  context:
+    required:
+      - changed-files
+      - architecture
+    optional:
+      - decisions
+      - bug-ledger
+  skills: []
+
+produces:
+  artifacts:
+    - change-impact-analysis
+  facts:
+    - affected-modules
+
+completion:
+  invariants:
+    - directly affected modules are identified
+    - cross-boundary impacts are recorded when present
+    - verification scope is traceable to identified impacts
