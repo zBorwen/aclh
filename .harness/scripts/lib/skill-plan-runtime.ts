@@ -39,11 +39,12 @@ export function validateSkillPlanDocument(value: unknown, taskId: string, requir
   rejectUnknownKeys(value.classification, CLASSIFICATION_KEYS, 'skill-plan classification');
   if (value.classification.ref !== 'classification.yaml') throw new Error('skill-plan classification.ref must be classification.yaml');
 
-  const selected = skillArray(value.selected, 'skill-plan selected', false);
-  const selectedCanonical = [...selected].sort();
-  if (selected.join('\0') !== selectedCanonical.join('\0')) {
+  const selectedRaw = skillArray(value.selected, 'skill-plan selected', false);
+  const selectedCanonical = [...selectedRaw].sort();
+  if (requireResolved && selectedRaw.join('\0') !== selectedCanonical.join('\0')) {
     throw new Error('skill-plan selected must be in canonical sorted order; run --resolve');
   }
+  const selected = requireResolved ? selectedRaw : selectedCanonical;
 
   let resolved: string[] | undefined;
   if (value.resolved !== undefined) resolved = skillArray(value.resolved, 'skill-plan resolved', false);
