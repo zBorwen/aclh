@@ -15,11 +15,12 @@ Do not create task files yet.
 Run `git status --short`, resolve the current branch, and inspect HEAD.
 
 - Never initialize an ACLH task from detached HEAD.
-- If the current branch is `main` or `master`, create and switch to `agent/<task-slug>` before `init-task.ts`.
-- If already on a non-default task branch, keep it unless doing so would mix unrelated work.
+- `$aclh-task` is a new-task entry point. For a new task, always create and switch to a dedicated `agent/<task-slug>` branch before `init-task.ts`, even when the Skill itself is being tested from another feature/adapter branch. The new task branch starts from the current HEAD so the repo-local Adapter remains available during branch testing.
+- Reuse the current branch only when the request explicitly continues an existing ACLH task and `docs/wip/<TASK_ID>/.state.yaml` already binds that task to the current branch.
+- If the target branch name already exists, append the smallest numeric suffix that makes it unique; do not silently attach a new task to an unrelated existing branch.
 - If unrelated dirty changes would contaminate the task snapshot, stop before branch/task mutation and report the conflicting paths. Do not discard or hide user changes.
 
-The branch must be stable before task initialization because ACLH binds task identity to branch + base commit.
+The dedicated branch must be stable before task initialization because ACLH binds task identity to branch + base commit.
 
 ## 3. Assess bootstrap metadata
 
