@@ -127,6 +127,7 @@ try {
     requirements: {
       preserve_classification: true,
       skill_plan_review: baseline !== null,
+      context_scope_refresh: fs.existsSync(path.join(taskDir, 'context-scope.json')),
       context_refresh: fs.existsSync(path.join(taskDir, 'context.json')),
       evidence_refresh: evidenceHasGates(),
       self_review_refresh: typeof state.self_review?.run_at === 'string' && state.self_review.run_at.trim().length > 0,
@@ -139,6 +140,7 @@ try {
   else {
     console.log(`Resync PREPARED for ${taskId}: ${currentTaskChanges.length} current task change(s).`);
     console.log(`  Skill Plan review: ${report.requirements.skill_plan_review ? 'required' : 'not applicable'}`);
+    console.log(`  Context Scope refresh: ${report.requirements.context_scope_refresh ? 'required' : 'not yet generated'}`);
     console.log(`  Context refresh: ${report.requirements.context_refresh ? 'required' : 'not yet generated'}`);
     console.log(`  Evidence refresh: ${report.requirements.evidence_refresh ? 'required' : 'not yet recorded'}`);
     console.log('  Classification: preserve current Task classification');
