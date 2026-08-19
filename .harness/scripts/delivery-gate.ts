@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
 interface RiskPolicy {
   context_required?: unknown;
@@ -11,21 +11,21 @@ interface RiskPolicy {
   independent_review?: unknown;
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
+const roots = resolveRuntimeRoots(import.meta.url);
+const ROOT = roots.projectRoot;
 const taskId = process.argv[2];
 if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId)) {
   console.error('Usage: node .harness/scripts/delivery-gate.ts <TASK_ID>');
   process.exit(1);
 }
 
-const taskDir = path.join(ROOT, 'docs/wip', taskId);
+const taskDir = path.join(roots.projectWipDir, taskId);
 if (!fs.existsSync(path.join(taskDir, '.state.yaml'))) {
   console.error(`Task not found or not initialized: ${taskId}`);
   process.exit(1);
 }
 
-const governance = parseYaml(fs.readFileSync(path.join(ROOT, '.harness/governance.yaml'), 'utf8')) as {
+const governance = parseYaml(fs.readFileSync(path.join(roots.runtimeHarnessDir, 'governance.yaml'), 'utf8')) as {
   default_risk_level?: unknown;
   risk_levels?: Record<string, RiskPolicy>;
 };
@@ -38,43 +38,49 @@ if (!policy) {
 }
 
 function run(script: string, args: string[]): void {
-  const result = spawnSync(process.execPath, [script, ...args], { cwd: ROOT, stdio: 'inherit' });
+  const scriptPath = path.join(roots.runtimeHarnessDir, 'scripts', script);
+  const result = spawnSync(process.execPath, [scriptPath, ...args], {
+    cwd: ROOT,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      ACLH_RUNTIME_ROOT: roots.runtimeRoot,
+      ACLH_PROJECT_ROOT: ROOT,
+    },
+  });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
 const hasSkillPlan = fs.existsSync(path.join(taskDir, 'skill-plan.yaml'));
 console.log(`[Delivery] ${taskId}: applying risk ${risk}${hasSkillPlan ? ' with P3 Skill Plan' : ' with P2 compatibility workflow'}`);
-run('.harness/scripts/task-identity.ts', [taskId, '--verify']);
+run('task-identity.ts', [taskId, '--verify']);
 
 if (hasSkillPlan) {
-  // P3 Skill inputs/outputs are repository content. They must be finalized before
-  // Evidence freshness is verified, otherwise completing them would immediately
-  // invalidate the evidence snapshot.
-  run('.harness/scripts/classification.ts', [taskId, '--verify']);
-  run('.harness/scripts/skill-plan.ts', [taskId, '--verify']);
-  run('.harness/scripts/context-select.ts', [taskId, '--verify']);
-  run('.harness/scripts/verification-plan.ts', [taskId]); // P2 compatibility layer during P3 v1.
-  run('.harness/scripts/skill-output.ts', [taskId, '--verify']);
-  run('.harness/scripts/evidence.ts', [taskId, '--verify']);
-  run('.harness/scripts/skill-evidence.ts', [taskId, '--verify']);
+  run('classification.ts', [taskId, '--verify']);
+  run('skill-plan.ts', [taskId, '--verify']);
+  run('context-select.ts', [taskId, '--verify']);
+  run('verification-plan.ts', [taskId]);
+  run('skill-output.ts', [taskId, '--verify']);
+  run('evidence.ts', [taskId, '--verify']);
+  run('skill-evidence.ts', [taskId, '--verify']);
 } else {
   if (policy.context_required === true) {
-    run('.harness/scripts/context-select.ts', [taskId, '--verify']);
+    run('context-select.ts', [taskId, '--verify']);
   } else {
     console.log(`[Delivery] ${taskId}: fresh task context not required by risk ${risk}`);
   }
-  run('.harness/scripts/verification-plan.ts', [taskId]);
-  run('.harness/scripts/evidence.ts', [taskId, '--verify']);
+  run('verification-plan.ts', [taskId]);
+  run('evidence.ts', [taskId, '--verify']);
 }
 
 if (policy.builder_self_review === true) {
-  run('.harness/scripts/self-review.ts', [taskId]);
+  run('self-review.ts', [taskId]);
 } else {
   console.log(`[Delivery] ${taskId}: builder self-review not required by risk ${risk}`);
 }
 
 if (policy.independent_review === 'codex-or-human' || policy.independent_review === 'human') {
-  run('.harness/scripts/independent-review.ts', [taskId, '--verify']);
+  run('independent-review.ts', [taskId, '--verify']);
 } else if (policy.independent_review === 'none') {
   console.log(`[Delivery] ${taskId}: independent review not required by risk ${risk}`);
 } else {
