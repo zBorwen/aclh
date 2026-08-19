@@ -104,7 +104,7 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/evid
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" <TASK_ID> --verify
 ```
 
-## 11. Review and delivery boundary
+## 11. Review, managed handoff, and delivery boundary
 
 When risk requires Builder self-review:
 
@@ -118,13 +118,21 @@ For L2/L3 prepare Independent Review:
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/independent-review.ts" <TASK_ID> --prepare
 ```
 
-The Builder context must not manufacture an independent PASS. Stop for a genuinely fresh Codex context or human reviewer. L3 remains human-only.
+Before the Builder stops for a fresh reviewer, record the last state intentionally managed by ACLH:
+
+```bash
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" <TASK_ID> --record
+```
+
+The managed snapshot is Git-local synchronization state, not Evidence and not a review PASS. The Builder context must not manufacture an independent PASS. Stop for a genuinely fresh Codex context or human reviewer. L3 remains human-only.
 
 After the required independent review exists:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" <TASK_ID>
 ```
+
+A successful Delivery Gate records a fresh managed checkpoint automatically.
 
 ## 12. Completion report
 
