@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
+import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
 type Enforcement = 'verifiable' | 'blocking';
 type CheckRecord = Record<string, unknown>;
@@ -51,10 +51,9 @@ interface CheckOutcome {
   activePreset: string | null;
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, '../../');
-const harnessDir = path.join(projectRoot, '.harness');
+const roots = resolveRuntimeRoots(import.meta.url);
+const projectRoot = roots.projectRoot;
+const harnessDir = roots.runtimeHarnessDir;
 
 const args = process.argv.slice(2);
 const options: CheckOptions = { format: 'text', phase: null, task: null };
