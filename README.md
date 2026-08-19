@@ -11,6 +11,18 @@
 - **P2 Governance Scaling**：Risk、Task identity、task-dependent verification、bounded Context/Knowledge retrieval。
 - **P3 Engineering Skills**：Classification、Skill Contract、dependency resolution、Explicit Skill Plan、Skill-aware Context、Skill Output、Skill→Evidence、统一 Delivery Gate。
 
+## 当前架构图
+
+可编辑 Excalidraw 图集位于 [`docs/architecture/`](./docs/architecture/README.md)：
+
+1. `01-system-overview.excalidraw` — P0–P3 全局分层与边界。
+2. `02-task-to-delivery.excalidraw` — Task 到 Trusted Delivery 的完整执行链。
+3. `03-skill-runtime.excalidraw` — Skill Contract / Plan / Context / Output / Evidence Runtime。
+4. `04-governance-trust.excalidraw` — Risk、Verifier、Evidence、CI、Self-review、Independent Review。
+5. `05-repository-structure.excalidraw` — 当前仓库目录与职责映射。
+
+这些图是解释性文档；若与代码冲突，以 `AGENTS.md`、`.harness/*` executable contracts 与 regression tests 为准。
+
 ## P3 核心模型
 
 ```text
@@ -165,4 +177,4 @@ P2 `verification_strategy` 在 P3 v1 **暂不废弃**。当前五个 Skill 尚�
 - P3 Engineering Skills v1：**完成**
 - P2 `verification_strategy`：保留为 compatibility layer
 - Semgrep：未接入
-- 旧静态 Excalidraw 架构图：已删除；当前以可执行 Contract / Runtime behavior 为准
+- 当前静态架构图：`docs/architecture/` 下 5 张可编辑 Excalidraw，旧图已替换
