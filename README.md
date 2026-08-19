@@ -162,7 +162,7 @@ P2 `verification_strategy` 在 P3 v1 **暂不废弃**。当前五个 Skill 尚�
 - P0：完成
 - P1：完成
 - P2：完成
-- P3 Engineering Skills v1：实现完成，等待最终 regression / CI Evidence 验收
+- P3 Engineering Skills v1：**完成**
 - P2 `verification_strategy`：保留为 compatibility layer
 - Semgrep：未接入
 - 旧静态 Excalidraw 架构图：已删除；当前以可执行 Contract / Runtime behavior 为准
