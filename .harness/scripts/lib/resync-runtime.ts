@@ -28,6 +28,7 @@ export interface ResyncReport {
   requirements: {
     preserve_classification: true;
     skill_plan_review: boolean;
+    context_scope_refresh: boolean;
     context_refresh: boolean;
     evidence_refresh: boolean;
     self_review_refresh: boolean;
@@ -52,7 +53,8 @@ export function loadResyncReport(root: string, taskId: string): ResyncReport | n
     !parsed.current ||
     parsed.baseline_skill_plan === undefined ||
     !parsed.changes ||
-    !parsed.requirements
+    !parsed.requirements ||
+    typeof parsed.requirements.context_scope_refresh !== 'boolean'
   ) throw new Error('invalid resync report schema');
   if (parsed.baseline_skill_plan !== null) {
     const baseline = parsed.baseline_skill_plan;
