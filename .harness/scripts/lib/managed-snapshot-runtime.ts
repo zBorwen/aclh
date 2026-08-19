@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeRepoPath, repositorySnapshot, sameSnapshot, type RepositorySnapshot } from './evidence-runtime.ts';
@@ -9,8 +10,15 @@ export interface ManagedSnapshotFile {
   recorded_at: string;
 }
 
-export function managedSnapshotPath(taskDir: string): string {
-  return path.join(taskDir, 'managed-snapshot.json');
+function gitPath(root: string, relative: string): string {
+  const result = spawnSync('git', ['rev-parse', '--git-path', relative], { cwd: root, encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(result.stderr.trim() || 'cannot resolve Git-local ACLH state path');
+  const resolved = result.stdout.trim();
+  return path.isAbsolute(resolved) ? resolved : path.resolve(root, resolved);
+}
+
+export function managedSnapshotPath(root: string, taskId: string): string {
+  return gitPath(root, `aclh/managed/${taskId}.json`);
 }
 
 export function managedSnapshotExclusions(root: string, taskDir: string): string[] {
@@ -19,7 +27,6 @@ export function managedSnapshotExclusions(root: string, taskDir: string): string
     'evidence.json',
     'review-packet.md',
     'independent-review.json',
-    'managed-snapshot.json',
   ].map(name => normalizeRepoPath(path.relative(root, path.join(taskDir, name))));
 }
 
