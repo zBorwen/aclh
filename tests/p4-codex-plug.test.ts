@@ -24,23 +24,22 @@ function run(action: 'attach' | 'detach' | 'status', projectRoot: string) {
   });
 }
 
-test('external capability manifest has a valid staged command surface', () => {
+test('external capability manifest exposes a complete delivery-ready surface', () => {
   const manifest = parseYaml(fs.readFileSync(path.join(ENGINE_ROOT, '.harness/external-capabilities.yaml'), 'utf8')) as {
     version: string;
     external_mode: { status: string; commands: Record<string, string> };
   };
   assert.equal(manifest.version, '1.0');
-  assert.equal(typeof manifest.external_mode.status, 'string');
-  assert.ok(manifest.external_mode.status.length > 0);
+  assert.equal(manifest.external_mode.status, 'delivery-ready');
   for (const [command, state] of Object.entries(manifest.external_mode.commands)) {
-    assert.ok(['supported', 'pending'].includes(state), `${command} has invalid capability state ${state}`);
+    assert.equal(state, 'supported', `${command} must be supported once external delivery is complete`);
   }
-  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence', 'self-review', 'independent-review']) {
-    assert.equal(manifest.external_mode.commands[command], 'supported', `${command} must remain supported once migrated`);
+  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence', 'self-review', 'independent-review', 'delivery-gate']) {
+    assert.equal(manifest.external_mode.commands[command], 'supported');
   }
 });
 
-test('Codex integration attaches as a thin Skill and detaches without touching consumer files', () => {
+test('Codex integration attaches as a thin full-lifecycle Skill and detaches without touching consumer files', () => {
   const projectRoot = createConsumer();
   try {
     const readmeBefore = fs.readFileSync(path.join(projectRoot, 'README.md'), 'utf8');
@@ -49,8 +48,11 @@ test('Codex integration attaches as a thin Skill and detaches without touching c
     const attach = run('attach', projectRoot);
     assert.equal(attach.status, 0, attach.stderr || attach.stdout);
     const skillPath = path.join(projectRoot, '.agents/skills/aclh-task/SKILL.md');
+    const lifecyclePath = path.join(projectRoot, '.agents/skills/aclh-task/references/lifecycle.md');
     assert.equal(fs.existsSync(skillPath), true);
+    assert.equal(fs.existsSync(lifecyclePath), true);
     assert.match(fs.readFileSync(skillPath, 'utf8'), /thin consumer integration/);
+    assert.match(fs.readFileSync(lifecyclePath, 'utf8'), /delivery-gate\.ts/);
     assert.equal(fs.existsSync(path.join(projectRoot, '.harness')), false, 'Runtime implementation must stay outside the consumer repo');
 
     const status = run('status', projectRoot);
