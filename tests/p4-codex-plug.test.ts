@@ -35,7 +35,7 @@ test('external capability manifest has a valid staged command surface', () => {
   for (const [command, state] of Object.entries(manifest.external_mode.commands)) {
     assert.ok(['supported', 'pending'].includes(state), `${command} has invalid capability state ${state}`);
   }
-  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence']) {
+  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence', 'self-review']) {
     assert.equal(manifest.external_mode.commands[command], 'supported', `${command} must remain supported once migrated`);
   }
 });
