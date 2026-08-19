@@ -5,6 +5,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { loadClassification } from './lib/classification-runtime.ts';
+import {
+  contextScopePath,
+  contextScopeSemanticHash,
+  loadContextScope,
+  resolveContextScope,
+  verifyContextScopeFresh,
+  type ContextScopeArtifact,
+} from './lib/context-scope-runtime.ts';
 import { loadSkillPlan } from './lib/skill-plan-runtime.ts';
 import { resolveRuntimeRelative, resolveRuntimeRoots } from './lib/runtime-roots.ts';
 import {
@@ -23,6 +31,7 @@ interface RequirementUsage { requiredBy: Set<string>; optionalBy: Set<string>; }
 
 const roots = resolveRuntimeRoots(import.meta.url);
 const ROOT = roots.projectRoot;
+const EXTERNAL_MODE = path.resolve(roots.runtimeRoot) !== path.resolve(ROOT);
 const PROJECT_DIR = process.env.ACLH_PROJECT_DIR
   ? (path.isAbsolute(process.env.ACLH_PROJECT_DIR) ? path.normalize(process.env.ACLH_PROJECT_DIR) : path.resolve(ROOT, process.env.ACLH_PROJECT_DIR))
   : path.join(ROOT, '.harness/project');
@@ -39,6 +48,7 @@ if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId) || !['--generate','-
 const taskDir = path.join(roots.projectWipDir, taskId);
 const statePath = path.join(taskDir, '.state.yaml');
 const outputPath = path.join(taskDir, 'context.json');
+const scopePath = contextScopePath(taskDir);
 const skillPlanPath = path.join(taskDir, 'skill-plan.yaml');
 const classificationPath = path.join(taskDir, 'classification.yaml');
 if (!fs.existsSync(statePath)) { console.error(`Context FAIL: task state missing for ${taskId}`); process.exit(1); }
@@ -79,12 +89,12 @@ function changeContentHash(files: string[]): string {
   }
   return hasher.digest('hex');
 }
-function basisHashLegacy(files: string[], modules: string[], tags: string[], explicitFiles: string[]): string {
-  return hashValue({files,modules:[...modules].sort(),tags:[...tags].sort(),explicitFiles:[...explicitFiles].sort()});
+function basisHashLegacy(files: string[], modules: string[], tags: string[], explicitFiles: string[], scopeSha = ''): string {
+  return hashValue({files,modules:[...modules].sort(),tags:[...tags].sort(),explicitFiles:[...explicitFiles].sort(),context_scope_sha256:scopeSha});
 }
 function basisHashP3(
   files: string[], modules: string[], tags: string[], explicitFiles: string[], changeSha: string,
-  skillPlanSha: string, contextContractSha: string, retrievalPolicySha: string,
+  skillPlanSha: string, contextContractSha: string, retrievalPolicySha: string, scopeSha = '',
 ): string {
   return hashValue({
     files,
@@ -93,6 +103,7 @@ function basisHashP3(
     skill_plan_sha256:skillPlanSha,
     context_contract_sha256:contextContractSha,
     retrieval_policy_sha256:retrievalPolicySha,
+    context_scope_sha256:scopeSha,
   });
 }
 function matchesFilePattern(pattern: string, file: string): boolean {
@@ -159,10 +170,33 @@ const state = loadYamlFile(statePath) as {
 };
 const baseCommit = typeof state.identity?.base_commit === 'string' ? state.identity.base_commit : '';
 if (!/^[0-9a-f]{40}$/.test(baseCommit)) fail('task identity.base_commit is missing or invalid');
-const explicitModules = arrayOfStrings(state.context_scope?.modules);
-const tags = arrayOfStrings(state.context_scope?.tags);
-const explicitFiles = arrayOfStrings(state.context_scope?.files).map(normalize);
+const stateModules = arrayOfStrings(state.context_scope?.modules);
+const stateTags = arrayOfStrings(state.context_scope?.tags);
+const stateFiles = arrayOfStrings(state.context_scope?.files).map(normalize);
 const isSkillAware = fs.existsSync(skillPlanPath);
+
+let scopeArtifact: ContextScopeArtifact | null = null;
+let contextScopeSha = '';
+if (EXTERNAL_MODE || fs.existsSync(scopePath)) {
+  try {
+    const recorded = loadContextScope(scopePath, taskId);
+    const current = resolveContextScope(ROOT, taskDir, taskId, {
+      baseCommit,
+      explicitModules: stateModules,
+      explicitTags: stateTags,
+      explicitFiles: stateFiles,
+    });
+    verifyContextScopeFresh(current, recorded);
+    scopeArtifact = recorded;
+    contextScopeSha = contextScopeSemanticHash(recorded);
+  } catch (error) {
+    fail(`Context Scope invalid or stale: ${(error as Error).message}`);
+  }
+}
+
+const explicitModules = scopeArtifact ? scopeArtifact.scope.modules : stateModules;
+const tags = scopeArtifact ? scopeArtifact.scope.tags : stateTags;
+const explicitFiles = scopeArtifact ? scopeArtifact.basis.explicit_scope.files : stateFiles;
 
 let catalog: Map<string,SkillContract> | undefined;
 let capabilities: Map<string,ContextCapability> | undefined;
@@ -190,14 +224,22 @@ if (isSkillAware) {
 }
 
 let changed: string[];
-try {
-  const controlExclusions = isSkillAware
-    ? [normalize(path.relative(ROOT,classificationPath)),normalize(path.relative(ROOT,skillPlanPath))]
-    : [];
-  changed = changedFiles(baseCommit,controlExclusions);
-} catch (error) { fail((error as Error).message); }
-const changeSha = isSkillAware ? changeContentHash(changed) : '';
-const effectiveFiles = [...new Set([...changed,...explicitFiles])].sort();
+let changeSha: string;
+let effectiveFiles: string[];
+if (scopeArtifact) {
+  changed = scopeArtifact.basis.changed_files;
+  changeSha = scopeArtifact.basis.change_content_sha256;
+  effectiveFiles = scopeArtifact.scope.files;
+} else {
+  try {
+    const controlExclusions = isSkillAware
+      ? [normalize(path.relative(ROOT,classificationPath)),normalize(path.relative(ROOT,skillPlanPath))]
+      : [];
+    changed = changedFiles(baseCommit,controlExclusions);
+  } catch (error) { fail((error as Error).message); }
+  changeSha = isSkillAware ? changeContentHash(changed) : '';
+  effectiveFiles = [...new Set([...changed,...explicitFiles])].sort();
+}
 
 const architecture = loadProjectYaml('architecture.yaml') as { modules?: unknown };
 const moduleDefs = Array.isArray(architecture.modules) ? architecture.modules as ModuleDef[] : [];
@@ -223,7 +265,7 @@ if (!isSkillAware) {
   const bugs = rankedTopK(bugLedger.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
   const gotchaEntries = rankedTopK(gotchas.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
   const decisionEntries = rankedTopK(decisions.entries,selectedModuleNames,tagSet,fileSet,scoring,maxItems);
-  const basis = basisHashLegacy(changed,explicitModules,tags,explicitFiles);
+  const basis = basisHashLegacy(changed,explicitModules,tags,explicitFiles,contextScopeSha);
   const selectedCount = bugs.items.length + gotchaEntries.items.length + decisionEntries.items.length;
   const totalMatches = bugs.total_matches + gotchaEntries.total_matches + decisionEntries.total_matches;
 
@@ -239,7 +281,11 @@ if (!isSkillAware) {
 
   const output = {
     version:'1.1', task_id:taskId, generated_at:new Date().toISOString(),
-    basis:{base_commit:baseCommit,sha256:basis,changed_files:changed,explicit_scope:{modules:explicitModules,tags,files:explicitFiles}},
+    basis:{
+      base_commit:baseCommit,sha256:basis,changed_files:changed,
+      explicit_scope:{modules:explicitModules,tags,files:explicitFiles},
+      ...(scopeArtifact?{context_scope_sha256:contextScopeSha,resolved_scope:scopeArtifact.scope}:{}),
+    },
     retrieval:{max_items_per_source:maxItems,scoring},
     selected:{
       profile:sourceDisplay(path.join(PROJECT_DIR,'profile.yaml')),
@@ -253,7 +299,7 @@ if (!isSkillAware) {
 }
 
 if (!catalog || !capabilities || !requirements) fail('skill-aware Context Runtime was not initialized');
-const basis = basisHashP3(changed,explicitModules,tags,explicitFiles,changeSha,skillPlanSha,contextContractSha,retrievalPolicySha);
+const basis = basisHashP3(changed,explicitModules,tags,explicitFiles,changeSha,skillPlanSha,contextContractSha,retrievalPolicySha,contextScopeSha);
 const requirementOutput: Record<string,unknown> = {};
 const selectedOutput: Record<string,unknown> = {};
 let selectedKnowledgeCount = 0;
@@ -305,7 +351,7 @@ if (mode==='--verify') {
   try { existing=JSON.parse(fs.readFileSync(outputPath,'utf8')); }
   catch { fail('context.json is invalid JSON'); }
   if (existing.version!=='2.0'||existing.task_id!==taskId||existing.mode!=='skill-aware'||existing.basis?.sha256!==basis) {
-    fail('context.json is stale for the current Skill Plan, Context contract or repository content');
+    fail('context.json is stale for the current Skill Plan, Context Scope, Context contract or repository content');
   }
   console.log(`Context PASS for ${taskId}: ${resolvedSkills.length} skill(s), ${Object.keys(requirementOutput).length} Context capability requirement(s).`);
   process.exit(0);
@@ -317,6 +363,7 @@ const output = {
     base_commit:baseCommit,sha256:basis,changed_files:changed,change_content_sha256:changeSha,
     skill_plan_sha256:skillPlanSha,context_contract_sha256:contextContractSha,retrieval_policy_sha256:retrievalPolicySha,
     explicit_scope:{modules:explicitModules,tags,files:explicitFiles},
+    ...(scopeArtifact?{context_scope_sha256:contextScopeSha,resolved_scope:scopeArtifact.scope}:{}),
   },
   skills:resolvedSkills,
   requirements:requirementOutput,
