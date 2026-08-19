@@ -161,3 +161,36 @@ export function validateSkillContextCapabilities(
     }
   }
 }
+
+export function resolveSkillIds(selected: string[], catalog: Map<string, SkillContract>): string[] {
+  if (selected.length === 0) throw new Error('at least one selected skill is required');
+  const normalized = [...new Set(selected)].sort();
+  for (const id of normalized) {
+    if (!catalog.has(id)) throw new Error(`unknown selected skill: ${id}`);
+  }
+
+  const state = new Map<string, 'visiting' | 'done'>();
+  const stack: string[] = [];
+  const resolved: string[] = [];
+
+  function visit(id: string): void {
+    const current = state.get(id);
+    if (current === 'done') return;
+    if (current === 'visiting') {
+      const cycleStart = stack.indexOf(id);
+      const cycle = [...stack.slice(cycleStart), id];
+      throw new Error(`skill dependency cycle: ${cycle.join(' -> ')}`);
+    }
+    state.set(id, 'visiting');
+    stack.push(id);
+    const contract = catalog.get(id);
+    if (!contract) throw new Error(`unknown skill dependency: ${id}`);
+    for (const dependency of [...contract.requires.skills].sort()) visit(dependency);
+    stack.pop();
+    state.set(id, 'done');
+    resolved.push(id);
+  }
+
+  for (const id of normalized) visit(id);
+  return resolved;
+}
