@@ -1,0 +1,42 @@
+version: "1.0"
+
+artifacts:
+  task-decomposition:
+    path: task-decomposition.md
+    required_sections:
+      - Task Slices
+      - Acceptance Boundaries
+      - Dependencies
+
+  root-cause-analysis:
+    path: root-cause-analysis.md
+    required_sections:
+      - Observed Symptom
+      - Reproduction
+      - Root Cause
+      - Affected Scope
+      - Evidence
+
+  change-impact-analysis:
+    path: change-impact-analysis.md
+    required_sections:
+      - Change Summary
+      - Affected Modules
+      - Cross-boundary Impact
+      - Verification Scope
+
+  regression-verification:
+    path: regression-verification.md
+    required_sections:
+      - Regression Scenarios
+      - Observable Behavior
+      - Test Coverage
+      - Evidence
+
+  compatibility-verification:
+    path: compatibility-verification.md
+    required_sections:
+      - Compatibility Boundaries
+      - Preserved Behavior
+      - Risks
+      - Evidence
