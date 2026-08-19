@@ -7,44 +7,101 @@
 - Prefer the smallest safe diff; do not refactor unrelated code.
 - Reason from the problem and root cause, not merely the current implementation.
 - Do not claim a verification step ran unless machine evidence records it.
+- A Skill artifact or reviewer statement is not a substitute for machine Evidence.
 
 ## Part A — Governance
 
-### A1. Task bootstrap and context loading
-1. Read `.harness/harness.yaml` and `.harness/governance.yaml` first.
-2. Every formal task has explicit `risk_level`, `verification_strategy`, Git identity, and `context_scope` in `docs/wip/<TASK_ID>/.state.yaml`.
-3. For L1+ tasks, generate task context with `node .harness/scripts/context-select.ts <TASK_ID> --generate`; use `context.json` instead of eagerly loading every project knowledge file.
-4. Context selection derives changed files from the task base commit, maps them to architecture modules plus one-hop dependencies, and retrieves bounded relevant knowledge.
-5. `preset` remains the single plugin composition source; project lists in presets are retrieval candidates, not automatic full-file context injection.
+### A1. Task bootstrap
+1. Read `.harness/harness.yaml`, `.harness/governance.yaml`, and `.harness/SKILLS.md` first.
+2. Every formal task has explicit `risk_level`, P2 `verification_strategy`, Git identity, and `context_scope` in `docs/wip/<TASK_ID>/.state.yaml`.
+3. P3 tasks additionally use task-local `classification.yaml` and `skill-plan.yaml`.
+4. P3 v1 Skill selection is explicit. Do not infer or auto-create a Skill Plan from Classification.
+5. `preset` remains the single plugin composition source.
 
-### A2. Risk-based lifecycle
+### A2. P3 task intelligence and Skills
+For a P3 task:
+1. create and validate `classification.yaml`;
+2. explicitly select Skills in `skill-plan.yaml`;
+3. resolve Skill dependencies deterministically;
+4. generate Skill-aware Context from the resolved Skill contracts;
+5. complete the declared Skill output artifacts;
+6. record machine Evidence after task/context/Skill artifacts are finalized;
+7. run the policy-aware delivery gate.
+
+Validate the first-class P3 artifacts with:
+
+```bash
+node .harness/scripts/classification.ts <TASK_ID> --verify
+node .harness/scripts/skill-plan.ts <TASK_ID> --resolve
+node .harness/scripts/skill-plan.ts <TASK_ID> --verify
+node .harness/scripts/context-select.ts <TASK_ID> --generate
+node .harness/scripts/skill-output.ts <TASK_ID> --verify
+node .harness/scripts/skill-evidence.ts <TASK_ID> --verify
+```
+
+Classification describes the task. It does not select Skills. Risk controls governance depth; it does not redefine the engineering problem.
+
+### A3. Skill boundaries
+P3 v1 supports only:
+- `understanding` Skills;
+- `verification` Skills.
+
+Implementation remains Builder-owned; execution Skills are not part of P3 v1.
+
+A Skill declares its required/optional Context, Skill dependencies, outputs and completion invariants. It must not define its own risk level, reviewer identity, CI provenance, trusted PASS state, or Context retrieval implementation.
+
+Workflow is the resolved result of the task's Skill Plan, not the reusable unit itself.
+
+### A4. Context loading
+For legacy P2 tasks without `skill-plan.yaml`, preserve P2 context behavior: L1+ requires fresh selected Context and L0 may omit it.
+
+For P3 tasks with a Skill Plan, Skill-required Context is an execution prerequisite regardless of risk level. Generate and verify it with:
+
+```bash
+node .harness/scripts/context-select.ts <TASK_ID> --generate
+node .harness/scripts/context-select.ts <TASK_ID> --verify
+```
+
+P3 Context Runtime:
+- unions Context requirements from all resolved Skills;
+- validates requirements against `.harness/context/capabilities.yaml`;
+- records which Skills required each capability;
+- preserves bounded project-knowledge retrieval and architecture expansion;
+- binds freshness to repository content, Skill Plan, Skill Context contracts and retrieval policy.
+
+Do not eagerly load all project knowledge when the Skill Plan requests a narrower set.
+
+### A5. Risk-based lifecycle
 | Risk | Intended use | Delivery requirements |
 |---|---|---|
-| `L0` | trivial/mechanical change | `check` evidence only; no required self/independent review |
-| `L1` | low-risk local code change | fresh context + check/typecheck/test + builder self-review |
+| `L0` | trivial/mechanical change | `check` risk Evidence only; no required self/independent review |
+| `L1` | low-risk local code change | check/typecheck/test + builder self-review |
 | `L2` | normal business development (default) | L1 + independent fresh-context Codex or human review |
 | `L3` | high-risk/cross-boundary change | L2 + independent **human** review |
 
-Risk is an additive governance level. Do not downgrade a task merely to bypass a gate.
+For P3 tasks, Skill-specific verification may require additional canonical Evidence gates even when the risk level itself does not. Example: an L0 task selecting `regression-verification` still needs fresh `test` Evidence.
 
-### A3. Task-dependent verification strategy
-TDD is one verification strategy, not a universal ritual. The task's `.state.yaml` selects one of:
+Risk is additive governance. Do not downgrade a task to bypass a gate.
 
-- `tdd` — RED → GREEN → REFACTOR for behavioral logic and defects.
-- `component` — component test + interaction/smoke verification.
-- `config` — schema validation + smoke verification.
-- `migration` — compatibility + rollback verification.
-- `docs` — structure + link/example verification.
+### A6. P2 verification strategy compatibility
+`verification_strategy` remains a P2 compatibility layer during P3 v1 because the current Skill catalog does not yet cover every component/config/docs/rollback verification marker.
 
-`test-plan.md` contains the required markers for the selected strategy. Complete them and verify with:
+Supported strategies remain:
+- `tdd` — RED / GREEN / REFACTOR
+- `component` — COMPONENT_TEST / INTERACTION_CHECK
+- `config` — SCHEMA_VALIDATION / SMOKE_TEST
+- `migration` — COMPATIBILITY_CHECK / ROLLBACK_CHECK
+- `docs` — DOC_STRUCTURE / LINK_OR_EXAMPLE_CHECK
+
+Verify with:
 
 ```bash
 node .harness/scripts/verification-plan.ts <TASK_ID>
 ```
 
-Do not invent a RED step for work where the selected strategy is not `tdd`.
+Do not invent a RED step for non-TDD work.
 
-### A4. Task identity
+### A7. Task identity
 A task is bound to its creation branch and base commit. Verify before delivery:
 
 ```bash
@@ -59,55 +116,68 @@ node .harness/scripts/task-identity.ts <TASK_ID> --bind-pr <PR_NUMBER>
 
 Do not reuse a task workspace from another branch.
 
-### A5. Machine evidence
-Record the canonical gates required by the task's risk level. L1-L3 require all three; L0 requires `check` only:
+### A8. Machine Evidence
+Record canonical gates required by risk and by selected verification Skills:
 
 ```bash
 npm run evidence -- <TASK_ID> --gate check
 npm run evidence -- <TASK_ID> --gate typecheck
 npm run evidence -- <TASK_ID> --gate test
 npm run evidence -- <TASK_ID> --verify
+node .harness/scripts/skill-evidence.ts <TASK_ID> --verify
 ```
 
-A repository change invalidates old evidence. GitHub Actions independently reruns the canonical repository gates and emits CI provenance evidence.
+A repository change invalidates old Evidence. Verification Skills map through `.harness/policies/skill-evidence.yaml` to the existing P1 canonical Evidence gates; they do not create a second PASS system. GitHub Actions independently reruns canonical repository gates and emits CI provenance evidence.
 
-### A6. Builder self-review
+### A9. Builder self-review
 Required for L1-L3, not L0:
 
 ```bash
 node .harness/scripts/self-review.ts <TASK_ID>
 ```
 
-Answer Q1-Q10 deliberately and record the builder's self-review in `.state.yaml`. This is a hostile self-check, **not independent review evidence**.
+This is a hostile Builder self-check, not independent review evidence.
 
-### A7. Independent review
-- L0/L1: not required by the risk policy.
+### A10. Independent review
+- L0/L1: not required by risk policy.
 - L2: fresh Codex context or human reviewer.
 - L3: human reviewer only.
-
-Prepare and verify:
 
 ```bash
 node .harness/scripts/independent-review.ts <TASK_ID> --prepare
 node .harness/scripts/independent-review.ts <TASK_ID> --verify
 ```
 
-The builder conversation must not manufacture a fresh-context PASS and present it as independent. ACLH verifies protocol declarations and repository freshness; it does not claim cryptographic proof of Codex session isolation.
+The Builder conversation must not manufacture a fresh-context PASS and present it as independent.
 
-### A8. Delivery gate
+### A11. Delivery gate
 Use the single policy-aware gate:
 
 ```bash
 node .harness/scripts/delivery-gate.ts <TASK_ID>
 ```
 
-It verifies, in order: task identity → fresh selected context when required → verification strategy → required machine evidence → builder self-review when required → independent review when required.
+P3 task order is:
 
-### A9. Human feedback loop
+```text
+task identity
+  -> Classification
+  -> Skill Plan
+  -> Skill-aware Context
+  -> P2 verification-strategy compatibility markers
+  -> Skill outputs
+  -> risk-required machine Evidence
+  -> verification-Skill Evidence
+  -> Builder self-review when required
+  -> Independent Review when required
+```
+
+Legacy tasks without `skill-plan.yaml` continue through the P2 compatibility workflow.
+
+### A12. Human feedback loop
 - PASS → delivery may proceed.
-- REJECT → record feedback and add the verification artifact appropriate to the task strategy before fixing the defect.
-- For `tdd`, reproduce behavioral feedback with a failing regression test when feasible.
-- For non-TDD strategies, add the corresponding component/schema/smoke/compatibility/docs verification instead of fabricating a unit-test RED step.
+- REJECT → record feedback and add the verification artifact appropriate to the task before fixing it.
+- For TDD, reproduce behavioral feedback with a failing regression test when feasible.
 - Persist reusable lessons into structured project knowledge.
 
 ## Part B — Coding cognitive model
@@ -121,13 +191,14 @@ Work in this order:
 
 ### B2. Execution order
 1. Bootstrap task governance and identity.
-2. Generate/select relevant context instead of loading the whole project knowledge base.
-3. Understand system state and identify root cause.
-4. Design the minimal safe solution.
-5. Execute the declared verification strategy while implementing.
-6. Verify affected callers and side effects.
-7. Produce risk-required machine evidence.
-8. Run the risk-required review gates.
+2. Describe the task with Classification when using P3.
+3. Select/resolve the explicit Skill Plan.
+4. Resolve only Context required by the Skill graph.
+5. Understand system state and design the minimal safe solution.
+6. Implement as the Builder.
+7. Complete declared understanding/verification Skill artifacts.
+8. Produce risk- and Skill-required machine Evidence.
+9. Run the risk-required review gates.
 
 ### B3. Change philosophy
 Prefer root fix over symptom patch, minimal diff over broad refactor, clarity over abstraction, explicit data flow over hidden magic, and stability over cleverness.
