@@ -2,11 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
+const roots = resolveRuntimeRoots(import.meta.url);
+const ROOT = roots.projectRoot;
 const taskId = process.argv[2];
 const mode = process.argv[3] ?? '--verify';
 
@@ -15,7 +15,7 @@ if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId)) {
   process.exit(1);
 }
 
-const statePath = path.join(ROOT, 'docs/wip', taskId, '.state.yaml');
+const statePath = path.join(roots.projectWipDir, taskId, '.state.yaml');
 if (!fs.existsSync(statePath)) {
   console.error(`Task identity FAIL: state missing for ${taskId}`);
   process.exit(1);
