@@ -14,7 +14,7 @@ function resolveConfiguredPath(value: string | undefined, fallback: string): str
   return path.resolve(value);
 }
 
-export function resolveRuntimeRoots(): RuntimeRoots {
+export function resolveRuntimeRoots(_callerUrl?: string): RuntimeRoots {
   const helperDir = path.dirname(fileURLToPath(import.meta.url));
   const defaultRuntimeRoot = path.resolve(helperDir, '../../..');
   const runtimeRoot = resolveConfiguredPath(process.env.ACLH_RUNTIME_ROOT, defaultRuntimeRoot);
