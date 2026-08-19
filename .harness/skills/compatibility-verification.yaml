@@ -1,0 +1,30 @@
+skill:
+  id: compatibility-verification
+  version: "1.0"
+  kind: verification
+
+description: >
+  Define compatibility expectations around an existing contract, runtime or
+  dependency boundary and verify that required behavior remains supported.
+
+requires:
+  context:
+    required:
+      - architecture
+      - decisions
+    optional:
+      - changed-files
+      - gotchas
+  skills: []
+
+produces:
+  artifacts:
+    - compatibility-verification
+  facts:
+    - compatibility-risks
+
+completion:
+  invariants:
+    - compatibility boundaries are explicit
+    - required preserved behavior is identified
+    - machine evidence is required before the verification can be trusted

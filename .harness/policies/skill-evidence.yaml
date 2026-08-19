@@ -1,0 +1,11 @@
+version: "1.0"
+
+verification_skills:
+  regression-verification:
+    required_gates:
+      - test
+
+  compatibility-verification:
+    required_gates:
+      - typecheck
+      - test

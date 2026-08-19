@@ -1,0 +1,25 @@
+version: "1.0"
+
+capabilities:
+  changed-files:
+    resolver: changed-files
+
+  project-profile:
+    resolver: project-file
+    source: profile.yaml
+
+  architecture:
+    resolver: project-file
+    source: architecture.yaml
+
+  bug-ledger:
+    resolver: knowledge
+    source: bug-ledger.yaml
+
+  gotchas:
+    resolver: knowledge
+    source: gotchas.yaml
+
+  decisions:
+    resolver: knowledge
+    source: decisions.yaml

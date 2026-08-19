@@ -1,0 +1,29 @@
+skill:
+  id: regression-verification
+  version: "1.0"
+  kind: verification
+
+description: >
+  Define and verify regression coverage for behavior that must remain correct
+  after a repository change.
+
+requires:
+  context:
+    required:
+      - changed-files
+    optional:
+      - bug-ledger
+      - gotchas
+  skills: []
+
+produces:
+  artifacts:
+    - regression-verification
+  facts:
+    - regression-scenarios
+
+completion:
+  invariants:
+    - regression scenarios are tied to observable behavior
+    - verification scope covers the identified changed behavior
+    - machine evidence is required before the verification can be trusted
