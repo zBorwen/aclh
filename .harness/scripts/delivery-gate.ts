@@ -88,4 +88,5 @@ if (policy.independent_review === 'codex-or-human' || policy.independent_review 
   process.exit(1);
 }
 
+run('managed-snapshot.ts', [taskId, '--record']);
 console.log(`[Delivery] ${taskId}: PASS for risk ${risk}${hasSkillPlan ? ' / P3 Skill Plan' : ''}`);
