@@ -3,6 +3,8 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
 export type SkillKind = 'understanding' | 'verification';
+export type ContextResolver = 'changed-files' | 'project-file' | 'knowledge';
+
 export interface SkillContract {
   skill: { id: string; version: '1.0'; kind: SkillKind };
   description: string;
@@ -14,6 +16,12 @@ export interface SkillContract {
   completion: { invariants: string[] };
 }
 
+export interface ContextCapability {
+  id: string;
+  resolver: ContextResolver;
+  source?: string;
+}
+
 const ROOT_KEYS = new Set(['skill', 'description', 'requires', 'produces', 'completion']);
 const SKILL_KEYS = new Set(['id', 'version', 'kind']);
 const REQUIRES_KEYS = new Set(['context', 'skills']);
@@ -21,6 +29,9 @@ const CONTEXT_KEYS = new Set(['required', 'optional']);
 const PRODUCES_KEYS = new Set(['artifacts', 'facts']);
 const COMPLETION_KEYS = new Set(['invariants']);
 const KINDS = new Set<SkillKind>(['understanding', 'verification']);
+const CONTEXT_REGISTRY_KEYS = new Set(['version', 'capabilities']);
+const CAPABILITY_KEYS = new Set(['resolver', 'source']);
+const CONTEXT_RESOLVERS = new Set<ContextResolver>(['changed-files', 'project-file', 'knowledge']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -104,4 +115,49 @@ export function loadSkillCatalog(skillsDir: string): Map<string, SkillContract> 
     }
   }
   return catalog;
+}
+
+export function loadContextCapabilities(registryPath: string): Map<string, ContextCapability> {
+  if (!fs.existsSync(registryPath)) throw new Error(`context capability registry not found: ${registryPath}`);
+  let parsed: unknown;
+  try { parsed = parseYaml(fs.readFileSync(registryPath, 'utf8')); }
+  catch (error) { throw new Error(`context capability registry invalid YAML: ${(error as Error).message}`); }
+  if (!isRecord(parsed)) throw new Error('context capability registry root must be an object');
+  rejectUnknownKeys(parsed, CONTEXT_REGISTRY_KEYS, 'context capability registry root');
+  if (parsed.version !== '1.0') throw new Error('context capability registry version must be "1.0"');
+  if (!isRecord(parsed.capabilities)) throw new Error('context capability registry capabilities must be an object');
+
+  const capabilities = new Map<string, ContextCapability>();
+  for (const [id, raw] of Object.entries(parsed.capabilities)) {
+    if (!/^[a-z][a-z0-9-]*$/.test(id)) throw new Error(`context capability id must be kebab-case: ${id}`);
+    if (!isRecord(raw)) throw new Error(`context capability ${id} must be an object`);
+    rejectUnknownKeys(raw, CAPABILITY_KEYS, `context capability ${id}`);
+    if (typeof raw.resolver !== 'string' || !CONTEXT_RESOLVERS.has(raw.resolver as ContextResolver)) {
+      throw new Error(`context capability ${id} has invalid resolver`);
+    }
+    const resolver = raw.resolver as ContextResolver;
+    const source = raw.source;
+    if (resolver === 'changed-files') {
+      if (source !== undefined) throw new Error(`context capability ${id}: changed-files resolver must not declare source`);
+      capabilities.set(id, { id, resolver });
+      continue;
+    }
+    if (typeof source !== 'string' || source.trim().length === 0) {
+      throw new Error(`context capability ${id}: ${resolver} resolver requires source`);
+    }
+    capabilities.set(id, { id, resolver, source });
+  }
+  return capabilities;
+}
+
+export function validateSkillContextCapabilities(
+  catalog: Map<string, SkillContract>,
+  capabilities: Map<string, ContextCapability>,
+): void {
+  for (const contract of catalog.values()) {
+    const requested = [...contract.requires.context.required, ...contract.requires.context.optional];
+    for (const capability of requested) {
+      if (!capabilities.has(capability)) throw new Error(`${contract.skill.id}: unknown context capability: ${capability}`);
+    }
+  }
 }
