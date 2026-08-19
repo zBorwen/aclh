@@ -21,6 +21,7 @@ export interface EvidenceFile {
   updated_at: string|null;
   gates: Partial<Record<GateName,EvidenceEntry>>;
 }
+export interface GateCommandSpec { command: string; program: string; args: string[]; }
 export type GateEvidenceStatus = 'fresh'|'missing'|'stale';
 
 export const GATES: Record<GateName,string> = {
@@ -29,6 +30,22 @@ export const GATES: Record<GateName,string> = {
   test:'npm test',
 };
 export const ALL_GATES: GateName[] = ['check','typecheck','test'];
+
+export function resolveGateCommandSpecs(runtimeRoot:string,projectRoot:string):Record<GateName,GateCommandSpec> {
+  const npmProgram = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const embedded = path.resolve(runtimeRoot) === path.resolve(projectRoot);
+  return {
+    check: embedded
+      ? {command:GATES.check,program:npmProgram,args:['run','check']}
+      : {
+          command:`node ${normalizeRepoPath(path.join(runtimeRoot,'.harness/scripts/check.ts'))}`,
+          program:process.execPath,
+          args:[path.join(runtimeRoot,'.harness/scripts/check.ts')],
+        },
+    typecheck:{command:GATES.typecheck,program:npmProgram,args:['run','typecheck']},
+    test:{command:GATES.test,program:npmProgram,args:['test']},
+  };
+}
 
 function runGitText(root:string,args:string[]):string {
   const result=spawnSync('git',args,{cwd:root,encoding:'utf8'});
@@ -74,9 +91,14 @@ export function loadEvidenceFile(taskId:string,evidencePath:string):{evidence:Ev
   return {evidence:parsed as EvidenceFile,legacyV1:false};
 }
 
-export function gateEvidenceStatus(entry:EvidenceEntry|undefined,gate:GateName,current:RepositorySnapshot):GateEvidenceStatus {
+export function gateEvidenceStatus(
+  entry:EvidenceEntry|undefined,
+  gate:GateName,
+  current:RepositorySnapshot,
+  expectedCommand:string=GATES[gate],
+):GateEvidenceStatus {
   const valid=Boolean(
-    entry&&entry.gate===gate&&entry.command===GATES[gate]&&entry.exit_code===0&&entry.result==='PASS'&&
+    entry&&entry.gate===gate&&entry.command===expectedCommand&&entry.exit_code===0&&entry.result==='PASS'&&
     entry.repository_unchanged===true&&typeof entry.started_at==='string'&&typeof entry.finished_at==='string'&&
     entry.repository&&typeof entry.repository.commit_sha==='string'&&typeof entry.repository.worktree_sha256==='string'
   );
@@ -84,8 +106,13 @@ export function gateEvidenceStatus(entry:EvidenceEntry|undefined,gate:GateName,c
   return sameSnapshot(entry.repository,current)?'fresh':'stale';
 }
 
-export function verifyEvidenceGates(evidence:EvidenceFile,current:RepositorySnapshot,gates:GateName[]):Map<GateName,GateEvidenceStatus> {
+export function verifyEvidenceGates(
+  evidence:EvidenceFile,
+  current:RepositorySnapshot,
+  gates:GateName[],
+  expectedCommands:Record<GateName,string>=GATES,
+):Map<GateName,GateEvidenceStatus> {
   const result=new Map<GateName,GateEvidenceStatus>();
-  for(const gate of gates) result.set(gate,gateEvidenceStatus(evidence.gates[gate],gate,current));
+  for(const gate of gates) result.set(gate,gateEvidenceStatus(evidence.gates[gate],gate,current,expectedCommands[gate]));
   return result;
 }
