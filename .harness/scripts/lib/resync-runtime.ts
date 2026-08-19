@@ -15,6 +15,11 @@ export interface ResyncReport {
     commit_sha: string;
     worktree_sha256: string;
   };
+  baseline_skill_plan: {
+    sha256: string;
+    selected: string[];
+    resolved: string[];
+  } | null;
   changes: {
     current_task_change_set: string[];
     committed_since_checkpoint: string[];
@@ -45,8 +50,18 @@ export function loadResyncReport(root: string, taskId: string): ResyncReport | n
     typeof parsed.detected_at !== 'string' ||
     !parsed.managed ||
     !parsed.current ||
+    parsed.baseline_skill_plan === undefined ||
     !parsed.changes ||
     !parsed.requirements
   ) throw new Error('invalid resync report schema');
+  if (parsed.baseline_skill_plan !== null) {
+    const baseline = parsed.baseline_skill_plan;
+    if (
+      typeof baseline !== 'object' ||
+      typeof baseline.sha256 !== 'string' ||
+      !Array.isArray(baseline.selected) || baseline.selected.some(item => typeof item !== 'string') ||
+      !Array.isArray(baseline.resolved) || baseline.resolved.some(item => typeof item !== 'string')
+    ) throw new Error('invalid resync baseline Skill Plan');
+  }
   return parsed as ResyncReport;
 }
