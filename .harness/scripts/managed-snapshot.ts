@@ -25,7 +25,8 @@ try {
     repository: captureManagedSnapshot(roots.projectRoot, taskDir),
     recorded_at: new Date().toISOString(),
   };
-  const output = managedSnapshotPath(taskDir);
+  const output = managedSnapshotPath(roots.projectRoot, taskId);
+  fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, `${JSON.stringify(record, null, 2)}\n`);
   console.log(`Managed Snapshot recorded for ${taskId}: ${record.repository.commit_sha.slice(0, 12)} / ${record.repository.worktree_sha256.slice(0, 12)}`);
 } catch (error) {
