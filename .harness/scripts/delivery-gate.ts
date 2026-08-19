@@ -14,6 +14,7 @@ interface RiskPolicy {
 
 const roots = resolveRuntimeRoots(import.meta.url);
 const ROOT = roots.projectRoot;
+const EXTERNAL_MODE = path.resolve(roots.runtimeRoot) !== path.resolve(ROOT);
 const taskId = process.argv[2];
 if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId)) {
   console.error('Usage: node .harness/scripts/delivery-gate.ts <TASK_ID>');
@@ -51,6 +52,10 @@ function run(script: string, args: string[]): void {
   });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
+function verifyContextBoundary(): void {
+  if (EXTERNAL_MODE) run('context-scope.ts', [taskId, '--verify']);
+  run('context-select.ts', [taskId, '--verify']);
+}
 
 const hasSkillPlan = fs.existsSync(path.join(taskDir, 'skill-plan.yaml'));
 console.log(`[Delivery] ${taskId}: applying risk ${risk}${hasSkillPlan ? ' with P3 Skill Plan' : ' with P2 compatibility workflow'}`);
@@ -63,14 +68,14 @@ if (hasSkillPlan) {
   if (resync?.requirements.skill_plan_review === true) {
     run('skill-replan.ts', [taskId, '--verify']);
   }
-  run('context-select.ts', [taskId, '--verify']);
+  verifyContextBoundary();
   run('verification-plan.ts', [taskId]);
   run('skill-output.ts', [taskId, '--verify']);
   run('evidence.ts', [taskId, '--verify']);
   run('skill-evidence.ts', [taskId, '--verify']);
 } else {
   if (policy.context_required === true) {
-    run('context-select.ts', [taskId, '--verify']);
+    verifyContextBoundary();
   } else {
     console.log(`[Delivery] ${taskId}: fresh task context not required by risk ${risk}`);
   }
