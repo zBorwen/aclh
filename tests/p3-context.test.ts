@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
-import { stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 function run(args: string[], env?: NodeJS.ProcessEnv) {
   return spawnSync(process.execPath, args, { cwd: process.cwd(), encoding: 'utf8', env: env ?? process.env });
@@ -66,7 +66,7 @@ test('Skill-aware Context differs by Skill Plan and binds repository content plu
   try {
     const dir = taskDir(taskId);
     const statePath = path.join(dir, '.state.yaml');
-    const state = (await import('yaml')).parse(fs.readFileSync(statePath, 'utf8')) as any;
+    const state = parseYaml(fs.readFileSync(statePath, 'utf8')) as any;
     state.context_scope = { modules: ['Auth'], tags: ['react'], files: ['src/auth/login.ts'] };
     fs.writeFileSync(statePath, stringifyYaml(state));
     writeClassification(taskId);
