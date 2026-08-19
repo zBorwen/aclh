@@ -1,22 +1,20 @@
-# 架构决策记录 (ADR)
+# 架构决策记录 (ADR)。
+# P2 retrieval metadata: modules/tags，便于按任务上下文选择相关 ADR。
 entries:
-  # 示例决策:
   # - id: "ADR-001"
-  #   date: "2023-10-20"
+  #   date: "2026-08-19"
   #   title: "选择 Zustand 作为状态管理库"
   #   status: "accepted" # proposed | accepted | deprecated | superseded
-  #   context: "Redux 对于当前的小型项目来说过于繁琐，我们需要一个轻量级的方案。"
+  #   modules: ["FrontendState"]
+  #   tags: ["react", "state-management"]
+  #   context: "Redux 对当前项目过重，需要更轻量的方案。"
   #   decision: "使用 Zustand 管理全局状态。"
   #   rationale:
-  #     - "API 简单，学习成本低"
-  #     - "无需 Provider 包裹"
-  #     - "性能优秀"
+  #     - "API 简单"
+  #     - "无需 Provider"
   #   rejected_alternatives:
   #     - name: "Redux"
   #       reason: "样板代码过多"
-  #     - name: "Context API"
-  #       reason: "容易导致不必要的重渲染"
   #   consequences:
-  #     - "团队需要学习 Zustand 的使用方法"
-  #     - "可能缺乏 Redux DevTools 那样完善的调试体验"
+  #     - "团队需要学习 Zustand"
   []

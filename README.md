@@ -1,102 +1,98 @@
 # AI Coding Lifecycle Harness (ACLH)
 
-一套把 AI 编码过程约束在 **规则 (Rules) + 流程 (Process) + 记忆 (Memory) + 门禁 (Guardrails)** 四条轨道上的工程治理模板。当前阶段只适配 **OpenAI Codex**，通过仓库根目录的 `AGENTS.md` 作为统一入口，在真实项目中约束 Codex 稳定地产出可审查、可复用、低返工的代码。
+一套把 AI 编码过程约束在 **Rules + Process + Memory + Guardrails** 四条轨道上的工程治理 Harness。当前只适配 **OpenAI Codex**，以 `AGENTS.md` 作为唯一 Agent contract。
 
-> 设计全景见 [`HARNESS_ANALYSIS.md`](HARNESS_ANALYSIS.md)；Codex 行为约束见 [`AGENTS.md`](AGENTS.md)（最高优先级）。
+> P1 Evidence/Review trust 见 `.harness/EVIDENCE.md`；P2 风险与上下文治理见 `.harness/P2_GOVERNANCE.md`。
 
----
+## 当前核心能力
 
-## 目录结构
+- **P0 Enforcement**：区分 advisory / verifiable / blocking，保留最小确定性 blocking 编码规则。
+- **P1 Trust Layer**：local evidence freshness、CI provenance、Builder self-review、Independent Review。
+- **P2 Governance Scaling**：Risk-based lifecycle、task-specific verification strategy、Task identity、Dynamic Context、Top-K Knowledge Retrieval。
 
-```text
-.
-├── AGENTS.md                  # Codex 最高约束：治理层 + 行为层
-├── HARNESS_ANALYSIS.md        # 架构深度分析文档（静态图后续统一更新）
-├── .harness/
-│   ├── harness.yaml           # preset / 插件装配
-│   ├── ENFORCEMENT.md         # advisory / verifiable / blocking 契约
-│   ├── EVIDENCE.md            # P1 Evidence Model + trust boundary
-│   ├── plugins/
-│   │   ├── rules/
-│   │   ├── process/
-│   │   └── templates/
-│   ├── project/
-│   ├── scripts/
-│   │   ├── check.ts
-│   │   ├── init-task.ts
-│   │   ├── evidence.ts        # 本地 task evidence
-│   │   ├── ci-evidence.ts     # GitHub Actions 独立 evidence verifier
-│   │   └── self-review.ts
-│   └── hooks/
-├── docs/wip/                  # task workspace + evidence.json
-└── diagrams/                  # 静态架构图，阶段稳定后统一更新
-```
-
-## 当前 Agent 适配范围
-
-- **Supported:** OpenAI Codex（`AGENTS.md` + `.harness/`）
-- **Not supported for now:** Cursor、GitHub Copilot、Claude Code 专用入口
-- 当前优先稳定 Codex 的治理、门禁和证据链，其他 Agent 后续再评估。
-
-## 核心机制
-
-- **双环验证**：内环由 Codex + TDD + machine gates 闭环；外环由人工 review 把关。
-- **对抗式自检**：提交人工审查前运行 `self-review.ts`，主动检查遗漏、假设、影响范围和根因。
-- **本地机器证据**：`evidence.ts` 执行 `check / typecheck / test`，把 PASS 绑定到 `HEAD SHA + worktree SHA-256`；代码变化后旧证据立即 stale。
-- **独立 CI 证据**：`ci-evidence.ts` 在 GitHub Actions 内独立重跑相同 canonical gates，记录 GitHub run provenance，并上传 CI evidence artifact；不会信任 task-local `evidence.json`。
-- **知识飞轮**：人工 review 的失败和经验进入 bug-ledger / gotchas，供后续任务使用。
-- **预设装配**：`harness.yaml` 根据任务类型选择 preset，加载相应规则、流程和模板。
-
-## 快速开始
+## P2 快速开始
 
 ```bash
-npm install
-npm run typecheck
-
-node .harness/scripts/check.ts
+# 默认 L2 + tdd
 node .harness/scripts/init-task.ts JIRA-101
 
-# Local Evidence
-npm run evidence -- JIRA-101 --gate check
-npm run evidence -- JIRA-101 --gate typecheck
-npm run evidence -- JIRA-101 --gate test
-npm run evidence -- JIRA-101 --verify
+# 也可以显式声明风险与验证方式
+node .harness/scripts/init-task.ts JIRA-102 --risk L1 --strategy component
 
-node .harness/scripts/self-review.ts JIRA-101
+# L1+：生成任务相关上下文，不再全量读取 project knowledge
+node .harness/scripts/context-select.ts JIRA-102 --generate
+
+# 完成 test-plan.md 中当前 strategy 对应的 markers
+node .harness/scripts/verification-plan.ts JIRA-102
+
+# 可选：任务已有 PR 时显式绑定
+node .harness/scripts/task-identity.ts JIRA-102 --bind-pr 123
+
+# 按 risk 记录需要的 machine evidence
+npm run evidence -- JIRA-102 --gate check
+npm run evidence -- JIRA-102 --gate typecheck
+npm run evidence -- JIRA-102 --gate test
+
+# 单一交付入口：自动按 risk 执行所需 gates/reviews
+node .harness/scripts/delivery-gate.ts JIRA-102
 ```
 
-GitHub Actions 的 `Harness CI` 会独立执行同样的 `check / typecheck / test`，并上传 `.harness/artifacts/ci-evidence.json` 作为 workflow artifact。
+## Risk-based lifecycle
 
-## P1 Evidence Layer
+| Risk | Intended use | Required delivery depth |
+|---|---|---|
+| `L0` | trivial/mechanical | check only |
+| `L1` | low-risk local change | fresh context + check/typecheck/test + Builder self-review |
+| `L2` | normal/default | L1 + fresh-context Codex or human independent review |
+| `L3` | high-risk/cross-boundary | L2 + human independent review only |
 
-P1 按以下顺序完成：
+风险等级只增加约束，不应为了绕过 gate 而降级。
 
-1. **Execution evidence**：真实执行 canonical command，记录时间、exit code、PASS/FAIL。
-2. **Freshness binding**：证据绑定 commit SHA + worktree fingerprint，防止修改代码后复用旧 PASS。
-3. **Evidence-backed blocking**：`check / typecheck / test` 成为任务交付前的 blocking workflow gates。
-4. **Independent CI provenance**：GitHub Actions 不消费本地 evidence，而是独立执行 gates 并记录 repository / commit / run / workflow / actor provenance。
+## Verification strategy
 
-P1 到这里结束。详细信任边界见 `.harness/EVIDENCE.md`。
+TDD 不再是所有任务的绝对流程。任务在 `.state.yaml` 中声明：
 
-## 设计决策与注意事项
+- `tdd` → RED / GREEN / REFACTOR
+- `component` → COMPONENT_TEST / INTERACTION_CHECK
+- `config` → SCHEMA_VALIDATION / SMOKE_TEST
+- `migration` → COMPATIBILITY_CHECK / ROLLBACK_CHECK
+- `docs` → DOC_STRUCTURE / LINK_OR_EXAMPLE_CHECK
 
-1. **配置模板初始为空**：真实项目接入时先填 `project/profile.yaml`、`architecture.yaml` 和项目命令。
-2. **AGENTS.md 是当前唯一 Agent contract**：只适配 Codex，避免过早承担多 Agent 兼容成本。
-3. **第一性原理优先**：优先根因修复；无法一次根治时要记录明确终态。
-4. **任务提交双门禁**：fresh local evidence → adversarial self-review → human review。
-5. **Local Evidence 不是独立 attestation**：仓库写入者可以编辑 `evidence.json`，因此只作为本地工作流证据。
-6. **CI Evidence 与 Local Evidence 分离**：CI 使用 GitHub Actions 环境提供的 provenance 独立生成 artifact，不接受本地 JSON 作为可信输入。
-7. **Branch protection 是仓库管理设置**：若要在 GitHub 层阻止 failing PR merge，应将 `Harness CI / verify` 配置为 required check；Harness 本身负责确定性的非零失败语义。
-8. **Semgrep 尚未接入**：当前仍使用 ACLH 自有轻量 check engine；不插入 P1 范围。
-9. **Git hooks 仍是本地快速反馈层**：真实项目建议结合 GitHub required checks，而不是把 hook 当最终可信边界。
-10. **静态架构图延后统一更新**：等后续核心模型稳定后一次性刷新。
+`verification-plan.ts` 会在交付时检查对应 marker 已完成。
+
+## Dynamic Context + Knowledge Retrieval
+
+`context-select.ts` 基于 task base commit 的 changed files、显式 `context_scope`、architecture module/path 和一跳依赖生成 `context.json`。L1+ 交付时必须验证它仍然 fresh。
+
+bug-ledger / gotchas / ADR 不再全量注入。P2 按 module、file、tag/category、severity 做确定性相关度评分，并按 `governance.yaml` 的 `max_items_per_source` 做 Top-K 截断。输出同时保留 selected count 与 total matches，避免隐藏截断。
+
+## Task identity
+
+任务初始化时绑定：
+
+```yaml
+identity:
+  branch: feature/example
+  base_commit: <40-char-sha>
+  pr_number: null
+```
+
+交付时必须仍处于绑定分支，`base_commit` 必须是当前 HEAD 的祖先；绑定 PR 后，在 GitHub Actions PR 环境中还会核对 PR number。
+
+## Trust boundary
+
+- Local Evidence 是 repository-local 证据，不是防篡改 attestation。
+- CI Evidence 由 GitHub Actions 独立执行并带 run provenance。
+- Builder self-review 不等于 Independent Review。
+- Fresh-context Codex isolation 目前是协议级声明，不是密码学证明。
+- Semgrep、AST/dependency enforcement、vector retrieval、Dashboard、静态架构图刷新不属于 P2。
 
 ## 当前状态（2026-08）
 
-- Agent 适配：Codex only
+- Agent：Codex only
 - P0：完成
-- P1 Evidence Layer：**完成**
-- Local evidence：execution + freshness + blocking
-- CI evidence：independent GitHub Actions provenance + artifact
+- P1：完成
+- P2 Governance Scaling：**完成**
+- P2 validation：strict typecheck + 27 regression tests + CI evidence artifact 全部通过
 - Semgrep：未接入
-- 静态架构图：暂未更新
+- 静态架构图：按约定在核心阶段完成后统一更新
