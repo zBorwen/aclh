@@ -3,6 +3,8 @@ risk_level: "{{RISK_LEVEL}}" # L0 | L1 | L2 | L3
 verification_strategy: "{{VERIFICATION_STRATEGY}}" # P2 compatibility: tdd | component | config | migration | docs
 classification:
   file: "classification.yaml"
+skill_plan:
+  file: "skill-plan.yaml"
 identity:
   branch: "{{BRANCH}}"
   base_commit: "{{BASE_COMMIT}}"
