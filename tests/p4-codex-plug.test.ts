@@ -35,9 +35,9 @@ test('external capability manifest has a valid staged command surface', () => {
   for (const [command, state] of Object.entries(manifest.external_mode.commands)) {
     assert.ok(['supported', 'pending'].includes(state), `${command} has invalid capability state ${state}`);
   }
-  assert.equal(manifest.external_mode.commands['init-task'], 'supported');
-  assert.equal(manifest.external_mode.commands.classification, 'supported');
-  assert.equal(manifest.external_mode.commands['skill-plan'], 'supported');
+  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output']) {
+    assert.equal(manifest.external_mode.commands[command], 'supported', `${command} must remain supported once migrated`);
+  }
 });
 
 test('Codex integration attaches as a thin Skill and detaches without touching consumer files', () => {
