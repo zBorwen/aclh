@@ -1,0 +1,29 @@
+skill:
+  id: task-decomposition
+  version: "1.0"
+  kind: understanding
+
+description: >
+  Decompose an engineering task into bounded implementation slices with explicit
+  acceptance boundaries and dependencies before implementation begins.
+
+requires:
+  context:
+    required:
+      - project-profile
+      - architecture
+    optional:
+      - decisions
+  skills: []
+
+produces:
+  artifacts:
+    - task-decomposition
+  facts:
+    - task-slices
+
+completion:
+  invariants:
+    - implementation slices are explicit and independently checkable
+    - acceptance boundaries are recorded for each slice
+    - known ordering dependencies between slices are recorded
