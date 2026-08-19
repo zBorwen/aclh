@@ -2,105 +2,167 @@
 
 一套把 AI 编码过程约束在 **Rules + Process + Memory + Guardrails** 四条轨道上的工程治理 Harness。当前只适配 **OpenAI Codex**，以 `AGENTS.md` 作为唯一 Agent contract。
 
-> P1 Evidence/Review trust 见 `.harness/EVIDENCE.md`；P2 风险与上下文治理见 `.harness/P2_GOVERNANCE.md`；P3 Engineering Skill contract 见 `.harness/SKILLS.md`。
+> P1 Evidence/Review trust 见 `.harness/EVIDENCE.md`；P2 风险与上下文治理见 `.harness/P2_GOVERNANCE.md`；P3 Engineering Skills 见 `.harness/SKILLS.md`。
 
 ## 当前核心能力
 
-- **P0 Enforcement**：区分 advisory / verifiable / blocking，保留最小确定性 blocking 编码规则。
-- **P1 Trust Layer**：local evidence freshness、CI provenance、Builder self-review、Independent Review。
-- **P2 Governance Scaling**：Risk-based lifecycle、task-specific verification strategy、Task identity、Dynamic Context、Top-K Knowledge Retrieval。
-- **P3 Engineering Skills（开发中）**：Task Classification、Skill Contract、Skill Plan、Skill-aware Context；Workflow 将逐步成为 Skill composition 的解析结果。
+- **P0 Enforcement**：advisory / verifiable / blocking + 最小确定性 blocking 规则。
+- **P1 Trust Layer**：repository-bound Evidence、CI provenance、Builder self-review、Independent Review。
+- **P2 Governance Scaling**：Risk、Task identity、task-dependent verification、bounded Context/Knowledge retrieval。
+- **P3 Engineering Skills**：Classification、Skill Contract、dependency resolution、Explicit Skill Plan、Skill-aware Context、Skill Output、Skill→Evidence、统一 Delivery Gate。
 
-## P2 快速开始
+## P3 核心模型
+
+```text
+Task
+  -> Classification
+  -> Explicit Skill Plan
+  -> Dependency-resolved Skills
+  -> Skill-aware Context
+  -> Builder
+  -> Skill Outputs
+  -> Risk Evidence + Skill Evidence
+  -> Review
+```
+
+Workflow 不再作为主要复用单元；它是 Skill Plan 解析后的任务实例。
+
+P3 v1 的 Skill selection 保持显式。Classification 只描述任务，不自动选择 Skill；“AI 推荐 Skill”还是“规则固定映射”留到真实使用积累后再决定。
+
+## P3 v1 Skill catalog
+
+Understanding Skills：
+- `task-decomposition`
+- `root-cause-analysis`
+- `change-impact-analysis`
+
+Verification Skills：
+- `regression-verification`
+- `compatibility-verification`
+
+Execution Skills 暂不进入 P3 v1，真正实现仍由 Builder 负责。
+
+## P3 task workflow
 
 ```bash
-# 默认 L2 + tdd
-node .harness/scripts/init-task.ts JIRA-101
+# 1. 初始化 task（P2 risk/identity 仍保留）
+node .harness/scripts/init-task.ts TASK-123 --risk L2 --strategy tdd
 
-# 也可以显式声明风险与验证方式
-node .harness/scripts/init-task.ts JIRA-102 --risk L1 --strategy component
+# 2. 编写 docs/wip/TASK-123/classification.yaml，然后验证
+node .harness/scripts/classification.ts TASK-123 --verify
 
-# L1+：生成任务相关上下文，不再全量读取 project knowledge
-node .harness/scripts/context-select.ts JIRA-102 --generate
+# 3. 显式编写 skill-plan.yaml，再做确定性 dependency resolution
+node .harness/scripts/skill-plan.ts TASK-123 --resolve
+node .harness/scripts/skill-plan.ts TASK-123 --verify
 
-# 完成 test-plan.md 中当前 strategy 对应的 markers
-node .harness/scripts/verification-plan.ts JIRA-102
+# 4. Skill Contract 决定 Context requirements
+node .harness/scripts/context-select.ts TASK-123 --generate
 
-# 可选：任务已有 PR 时显式绑定
-node .harness/scripts/task-identity.ts JIRA-102 --bind-pr 123
+# 5. 完成 Skill outputs 与 P2 verification compatibility markers
+node .harness/scripts/skill-output.ts TASK-123 --verify
+node .harness/scripts/verification-plan.ts TASK-123
 
-# 按 risk 记录需要的 machine evidence
-npm run evidence -- JIRA-102 --gate check
-npm run evidence -- JIRA-102 --gate typecheck
-npm run evidence -- JIRA-102 --gate test
+# 6. 在 task/context/Skill artifacts 最终稳定后记录 canonical Evidence
+npm run evidence -- TASK-123 --gate check
+npm run evidence -- TASK-123 --gate typecheck
+npm run evidence -- TASK-123 --gate test
 
-# 单一交付入口：自动按 risk 执行所需 gates/reviews
-node .harness/scripts/delivery-gate.ts JIRA-102
+# 7. Risk 与 Verification Skill 分别验证同一份 P1 Evidence
+npm run evidence -- TASK-123 --verify
+node .harness/scripts/skill-evidence.ts TASK-123 --verify
+
+# 8. 单一交付入口
+node .harness/scripts/delivery-gate.ts TASK-123
 ```
 
-## Risk-based lifecycle
+## Classification
 
-| Risk | Intended use | Required delivery depth |
-|---|---|---|
-| `L0` | trivial/mechanical | check only |
-| `L1` | low-risk local change | fresh context + check/typecheck/test + Builder self-review |
-| `L2` | normal/default | L1 + fresh-context Codex or human independent review |
-| `L3` | high-risk/cross-boundary | L2 + human independent review only |
+Classification v1 的 primary 只允许：
 
-风险等级只增加约束，不应为了绕过 gate 而降级。
-
-## Verification strategy
-
-TDD 不再是所有任务的绝对流程。任务在 `.state.yaml` 中声明：
-
-- `tdd` → RED / GREEN / REFACTOR
-- `component` → COMPONENT_TEST / INTERACTION_CHECK
-- `config` → SCHEMA_VALIDATION / SMOKE_TEST
-- `migration` → COMPATIBILITY_CHECK / ROLLBACK_CHECK
-- `docs` → DOC_STRUCTURE / LINK_OR_EXAMPLE_CHECK
-
-`verification-plan.ts` 会在交付时检查对应 marker 已完成。P3 在验证 Skill 模型稳定之前保留这个字段作为 P2 compatibility layer，不提前废弃。
-
-## Dynamic Context + Knowledge Retrieval
-
-P2 的 `context-select.ts` 基于 task base commit 的 changed files、显式 `context_scope`、architecture module/path 和一跳依赖生成 `context.json`。L1+ 交付时必须验证它仍然 fresh。
-
-bug-ledger / gotchas / ADR 不再全量注入。P2 按 module、file、tag/category、severity 做确定性相关度评分，并按 `governance.yaml` 的 `max_items_per_source` 做 Top-K 截断。P3 将保留这些 bounded/freshness 机制，只改变 Context requirement 的来源：由 Skill Contract 声明需求，再由通用 Context Runtime 解析。
-
-## Task identity
-
-任务初始化时绑定：
-
-```yaml
-identity:
-  branch: feature/example
-  base_commit: <40-char-sha>
-  pr_number: null
+```text
+feature | bug | refactor | migration | integration
 ```
 
-交付时必须仍处于绑定分支，`base_commit` 必须是当前 HEAD 的祖先；绑定 PR 后，在 GitHub Actions PR 环境中还会核对 PR number。
+Traits 用来表达 `cross-module`、`dependency-change`、`compatibility-sensitive` 等正交属性。Confidence 只使用 `high / medium / low`，避免伪精确概率。
 
-## P3 Engineering Skills 边界
+Classification 是 task description artifact，不是 Skill recommendation artifact。
 
-P3 v1 只把 `understanding` 与 `verification` 能力建模为 Skill。Risk、Evidence、CI provenance、Reviewer、Delivery Gate、Context Resolver 都属于 Runtime，而不是 Skill。
+## Skill Contract
 
-第一版 Skill selection 保持显式，不提前决定“AI 推荐”还是“规则固定映射”。先验证 Classification、Skill Contract、dependency resolution、Skill Plan 与 Skill-aware Context 是否成立，再用真实运行结果决定后续自动选择策略。
+Skill Contract 位于 `.harness/skills/*.yaml`，声明：
+- identity / kind
+- required + optional Context capabilities
+- Skill dependencies
+- produced artifacts / facts
+- completion invariants
+
+Skill Contract 不能声明 risk、reviewer、CI provenance 或自有可信 PASS。
+
+`.harness/context/capabilities.yaml` 是 Context vocabulary；Skill 请求 Runtime 不支持的 Context 会直接成为配置错误。
+
+## Skill-aware Context
+
+P3 `context.json` v2 根据**resolved Skill Contracts**收集 Context requirements，同一个 Context capability 只解析一次，同时记录 `required_by / optional_by` provenance。
+
+Freshness 绑定：
+- repository change content SHA-256；
+- explicit scope；
+- Skill Plan；
+- Skill Context contract / capability definition；
+- retrieval policy。
+
+因此即使 changed-file 名称没变，只要内容、Skill Plan 或 Skill Context Contract 变化，旧 Context 也会 stale。
+
+旧 P2 task 没有 `skill-plan.yaml` 时继续走 `context.json` v1.1 compatibility path。
+
+## Skill Output + Evidence
+
+`.harness/artifacts/skill-outputs.yaml` 定义 Skill artifact 的最低机器结构：文件存在、非空、关键 section 完整。自然语言 completion invariants 仍属于语义 Review，不用结构检查冒充语义正确。
+
+Verification Skill 不拥有第二套 PASS：`.harness/policies/skill-evidence.yaml` 只把它们映射到 P1 已存在的 canonical gates。
+
+例如：
+
+```text
+regression-verification
+        -> test
+
+compatibility-verification
+        -> typecheck + test
+```
+
+因此 L0 风险虽然本身只要求 `check`，如果任务显式选择了 `regression-verification`，仍必须提供 fresh `test` Evidence。
+
+## Risk + P2 compatibility
+
+| Risk | Risk-level delivery depth |
+|---|---|
+| `L0` | `check` Evidence；无强制 self/independent review |
+| `L1` | check/typecheck/test + Builder self-review |
+| `L2` | L1 + fresh-context Codex 或 human Independent Review |
+| `L3` | L2 + human-only Independent Review |
+
+P3 Skill requirements 与 Risk 正交：Skill 决定需要什么工程能力，Risk 决定治理深度。
+
+P2 `verification_strategy` 在 P3 v1 **暂不废弃**。当前五个 Skill 尚未完整覆盖 component/config/docs/rollback markers，过早删除会丢失已经验证过的能力，因此先作为 compatibility layer 保留。
 
 ## Trust boundary
 
-- Local Evidence 是 repository-local 证据，不是防篡改 attestation。
-- CI Evidence 由 GitHub Actions 独立执行并带 run provenance。
+- Local Evidence 是 repository-local evidence，不是防篡改 attestation。
+- CI Evidence 由 GitHub Actions 独立重跑 canonical gates 并记录 provenance。
 - Builder self-review 不等于 Independent Review。
 - Fresh-context Codex isolation 目前是协议级声明，不是密码学证明。
-- Skill 自身不能制造可信 PASS；P3 必须复用 P1 Evidence/Review 链。
-- Semgrep、AST/dependency enforcement、vector retrieval、Dashboard 不属于当前 P3 基线。
+- Skill output 不等于 Verification PASS；Verification Skill 必须依赖 fresh P1 machine Evidence。
+- AI 自动 Skill recommendation / Classification→Skill fixed mapping 都不属于 P3 v1。
+- Semgrep、AST dependency enforcement、vector retrieval、Dashboard 不属于当前 P3。
 
 ## 当前状态（2026-08）
 
 - Agent：Codex only
 - P0：完成
 - P1：完成
-- P2 Governance Scaling：完成
-- P3 Engineering Skills：开发中
+- P2：完成
+- P3 Engineering Skills v1：实现完成，等待最终 regression / CI Evidence 验收
+- P2 `verification_strategy`：保留为 compatibility layer
 - Semgrep：未接入
-- 旧静态 Excalidraw 架构图：已从 P3 分支删除，后续以可执行契约与运行时行为为准
+- 旧静态 Excalidraw 架构图：已删除；当前以可执行 Contract / Runtime behavior 为准
