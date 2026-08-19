@@ -12,6 +12,7 @@ import {
 } from './lib/managed-snapshot-runtime.ts';
 import { resyncReportPath, type ResyncReport } from './lib/resync-runtime.ts';
 import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
+import { loadSkillPlan, semanticSkillPlanHash } from './lib/skill-plan-runtime.ts';
 
 const roots = resolveRuntimeRoots(import.meta.url);
 const args = process.argv.slice(2);
@@ -58,6 +59,16 @@ function evidenceHasGates(): boolean {
     return Boolean(parsed.gates && typeof parsed.gates === 'object' && Object.keys(parsed.gates as object).length > 0);
   } catch { return true; }
 }
+function baselineSkillPlan(): ResyncReport['baseline_skill_plan'] {
+  const planPath = path.join(taskDir, 'skill-plan.yaml');
+  if (!fs.existsSync(planPath)) return null;
+  const plan = loadSkillPlan(planPath, taskId, true);
+  return {
+    sha256: semanticSkillPlanHash(plan),
+    selected: plan.selected,
+    resolved: plan.resolved ?? [],
+  };
+}
 
 try {
   const managedFile = managedSnapshotPath(roots.projectRoot, taskId);
@@ -94,6 +105,7 @@ try {
     catch { committedSinceCheckpoint = []; }
   }
   const currentWorktreeFiles = filtered([...diffFiles('HEAD'), ...untrackedFiles()], exclusions);
+  const baseline = baselineSkillPlan();
 
   const report: ResyncReport = {
     version: '1.0',
@@ -106,6 +118,7 @@ try {
       worktree_sha256: recorded.repository.worktree_sha256,
     },
     current,
+    baseline_skill_plan: baseline,
     changes: {
       current_task_change_set: currentTaskChanges,
       committed_since_checkpoint: committedSinceCheckpoint,
@@ -113,7 +126,7 @@ try {
     },
     requirements: {
       preserve_classification: true,
-      skill_plan_review: fs.existsSync(path.join(taskDir, 'skill-plan.yaml')),
+      skill_plan_review: baseline !== null,
       context_refresh: fs.existsSync(path.join(taskDir, 'context.json')),
       evidence_refresh: evidenceHasGates(),
       self_review_refresh: typeof state.self_review?.run_at === 'string' && state.self_review.run_at.trim().length > 0,
