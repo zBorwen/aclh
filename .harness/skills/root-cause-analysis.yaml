@@ -1,0 +1,30 @@
+skill:
+  id: root-cause-analysis
+  version: "1.0"
+  kind: understanding
+
+description: >
+  Distinguish an observed defect symptom from its underlying engineering cause
+  and record the affected scope before a corrective implementation is trusted.
+
+requires:
+  context:
+    required:
+      - changed-files
+      - bug-ledger
+    optional:
+      - gotchas
+      - architecture
+  skills: []
+
+produces:
+  artifacts:
+    - root-cause-analysis
+  facts:
+    - root-cause
+
+completion:
+  invariants:
+    - observed symptom is explicitly described
+    - root cause is distinguished from the symptom
+    - affected scope and causal path are recorded
