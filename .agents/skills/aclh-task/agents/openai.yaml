@@ -1,0 +1,7 @@
+interface:
+  display_name: "ACLH Task"
+  short_description: "Run a governed ACLH engineering task"
+  default_prompt: "Use $aclh-task to run this engineering request through ACLH."
+
+policy:
+  allow_implicit_invocation: false
