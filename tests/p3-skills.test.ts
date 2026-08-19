@@ -10,6 +10,10 @@ function run(args: string[], env?: NodeJS.ProcessEnv) {
   return spawnSync(process.execPath, args, { cwd: process.cwd(), encoding: 'utf8', env: env ?? process.env });
 }
 function tempSkillsDir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'aclh-p3-skills-')); }
+function tempFile(prefix: string) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  return { dir, file: path.join(dir, 'capabilities.yaml') };
+}
 function cleanup(dir: string) { fs.rmSync(dir, { recursive: true, force: true }); }
 function skillDocument(id: string, patch: Record<string, unknown> = {}) {
   const base = {
@@ -83,4 +87,52 @@ test('skill contract rejects filename/id mismatch and unknown fields', () => {
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /root contains unknown field\(s\): prompt/);
   } finally { cleanup(unknownDir); }
+});
+
+test('skill contract rejects Context capabilities that Runtime does not support', () => {
+  const dir = tempSkillsDir();
+  try {
+    writeSkill(dir, 'alpha.yaml', skillDocument('alpha', {
+      requires: { context: { required: ['dependency-graph'], optional: [] }, skills: [] },
+    }));
+    const result = run(['.harness/scripts/skill-check.ts', '--all'], { ...process.env, ACLH_SKILLS_DIR: dir });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /unknown context capability: dependency-graph/);
+  } finally { cleanup(dir); }
+});
+
+test('Context capability registry rejects invalid resolver/source contracts', () => {
+  const skillsDir = tempSkillsDir();
+  writeSkill(skillsDir, 'alpha.yaml', skillDocument('alpha'));
+
+  const invalidResolver = tempFile('aclh-p3-context-');
+  try {
+    fs.writeFileSync(invalidResolver.file, stringifyYaml({
+      version: '1.0', capabilities: { 'changed-files': { resolver: 'magic' } },
+    }));
+    const result = run(['.harness/scripts/skill-check.ts', '--all'], {
+      ...process.env,
+      ACLH_SKILLS_DIR: skillsDir,
+      ACLH_CONTEXT_CAPABILITIES: invalidResolver.file,
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /invalid resolver/);
+  } finally { cleanup(invalidResolver.dir); }
+
+  const missingSource = tempFile('aclh-p3-context-');
+  try {
+    fs.writeFileSync(missingSource.file, stringifyYaml({
+      version: '1.0', capabilities: { 'changed-files': { resolver: 'changed-files' }, architecture: { resolver: 'project-file' } },
+    }));
+    const result = run(['.harness/scripts/skill-check.ts', '--all'], {
+      ...process.env,
+      ACLH_SKILLS_DIR: skillsDir,
+      ACLH_CONTEXT_CAPABILITIES: missingSource.file,
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /project-file resolver requires source/);
+  } finally {
+    cleanup(missingSource.dir);
+    cleanup(skillsDir);
+  }
 });
