@@ -47,7 +47,7 @@ If the existing Skill Plan still covers the work:
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" <TASK_ID> --record unchanged --source codex
 ```
 
-If the required capabilities changed, edit explicit `selected`, then:
+If required capabilities changed, edit explicit `selected`, then:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" <TASK_ID> --resolve
@@ -61,7 +61,7 @@ Always verify the handoff checkpoint:
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" <TASK_ID> --verify
 ```
 
-Runtime verifies whether `changed|unchanged` matches the semantic Skill Plan baseline, but Runtime never chooses Skills automatically.
+Runtime validates the explicit re-plan decision but never chooses Skills automatically.
 
 ## 4. Assess metadata for a new Task
 
@@ -90,7 +90,7 @@ For a new Task, create consumer `docs/wip/<TASK_ID>/classification.yaml`, then:
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" <TASK_ID> --verify
 ```
 
-For a continuing Task, verify the existing Classification instead of rewriting it because the newest feedback happens to describe a bug or refactor.
+For a continuing Task, verify the existing Classification rather than rewriting it from the latest feedback subtype.
 
 ## 7. Author or verify the explicit Skill Plan
 
@@ -103,23 +103,35 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skil
 
 A continuing changed Task must already have completed the Re-plan checkpoint from step 3.
 
-## 8. Verify Context source readiness
+## 8. Resolve Context readiness and bootstrap blockers
 
-Before Scope or Context selection, inspect the Context capabilities required by the resolved Skill Plan:
+First inspect readiness without hiding blockers:
+
+```bash
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" <TASK_ID> --json
+```
+
+Readiness states are `ready`, `missing`, and `present-but-unusable`. Required non-ready sources block Context; optional unavailable sources do not block.
+
+If required blockers exist, prepare a deterministic bootstrap plan:
+
+```bash
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-bootstrap.ts" <TASK_ID> --prepare --json
+```
+
+Bootstrap has a strict ownership boundary:
+
+- For missing required knowledge ledgers, Runtime may safely initialize the structural empty form `entries: []`.
+- For semantic project Context such as `profile.yaml` or `architecture.yaml`, Runtime must not invent or overwrite content. Inspect the consumer repository and author the smallest factual project Context needed by the capability.
+- If an existing knowledge source is malformed/unusable, do not overwrite it automatically; repair it explicitly.
+
+After any bootstrap/authoring work, require Runtime validation:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" <TASK_ID> --verify --json
 ```
 
-Readiness is deterministic and structural:
-
-- `ready`: the source satisfies its minimal Runtime contract.
-- `missing`: the source file does not exist.
-- `present-but-unusable`: the file exists but cannot safely satisfy the capability.
-
-A required source that is not `ready` blocks Context. Optional unavailable sources do not block. An empty knowledge ledger with a valid `entries: []` schema is a legitimate ready state.
-
-At P4.11, do not fabricate semantic project Context merely to make readiness pass. Report the required blocker if the repository does not yet contain usable project profile/architecture data. Project Context bootstrap is a later capability.
+An empty but schema-valid knowledge ledger is a valid ready state; an empty semantic profile/architecture template is not.
 
 ## 9. Generate and verify Context Scope
 
@@ -152,7 +164,7 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/veri
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-output.ts" <TASK_ID> --verify
 ```
 
-Skill output structure is not semantic proof. After code/task content stabilizes, run readiness again if project Context changed, then regenerate/verify Scope and Context before final Evidence.
+Skill output structure is not semantic proof. After code/task content stabilizes, rerun readiness if project Context changed, then regenerate/verify Scope and Context before final Evidence.
 
 ## 12. Record canonical machine Evidence
 
@@ -203,4 +215,4 @@ Delivery re-verifies Context readiness, Scope, Context, Evidence, and trust gate
 
 ## 14. Completion report
 
-Report concrete state only: Task/branch, implementation summary, Classification, selected/resolved Skills, Context readiness/Scope blockers when relevant, handoff/Re-plan state, machine gates actually recorded, and delivery result or exact independent-review boundary still pending.
+Report concrete state only: Task/branch, implementation summary, Classification, selected/resolved Skills, Context bootstrap/readiness/Scope state, handoff/Re-plan state, machine gates actually recorded, and delivery result or exact independent-review boundary still pending.
