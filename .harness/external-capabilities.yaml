@@ -1,6 +1,6 @@
 version: "1.0"
 external_mode:
-  status: skill-evidence-ready
+  status: self-review-ready
   commands:
     init-task: supported
     classification: supported
@@ -11,6 +11,6 @@ external_mode:
     skill-output: supported
     evidence: supported
     skill-evidence: supported
-    self-review: pending
+    self-review: supported
     independent-review: pending
     delivery-gate: pending
