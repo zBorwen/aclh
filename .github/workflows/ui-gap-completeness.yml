@@ -1,0 +1,238 @@
+name: UI Verification Gap Completeness Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-ui-gap-completeness:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Create external L1 UI Task without browser capability
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-UI-GAP-COMPLETENESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+
+          CONSUMER="$RUNNER_TEMP/aclh-ui-gap-consumer"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src/components"
+          cd "$CONSUMER"
+          git init -b agent/ui-gap-completeness
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-ui-gap-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          cat > src/components/Panel.tsx <<'TS'
+          export function Panel() {
+            return 'old';
+          }
+          TS
+          git add .
+          git commit -m "initial UI consumer"
+
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-UI-GAP-COMPLETENESS
+          classification:
+            primary: feature
+            traits:
+              - behavior-change
+              - ui-interaction
+            confidence: high
+            rationale:
+              - "The task changes user-visible UI behavior and is intentionally classified with ui-interaction."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-UI-GAP-COMPLETENESS
+          classification:
+            ref: classification.yaml
+          selected:
+            - regression-verification
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          cat > src/components/Panel.tsx <<'TS'
+          export function Panel() {
+            return 'new interactive state';
+          }
+          TS
+
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] Change the user-visible panel behavior.
+          - [x] Characterize Verification Gap completeness for ui-interaction tasks.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Change the panel behavior.
+          - [x] Keep canonical non-browser machine gates green.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Canonical check/typecheck/test gates.
+
+          ## Verification Strategy
+
+          strategy: tdd
+
+          - [x] RED: UI behavior change identified
+          - [x] GREEN: non-browser machine gates pass
+          - [x] REFACTOR: characterize omitted-gap behavior
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Changed user-visible panel behavior for completeness validation.
+          MD
+          cat > "$TASK_DIR/regression-verification.md" <<'MD'
+          # Regression Scenarios
+          - Canonical consumer tests remain green.
+
+          # Observable Behavior
+          - The panel returns the new visible state.
+
+          # Test Coverage
+          - Only the canonical non-browser test gate is available in this fixture.
+
+          # Evidence
+          - Fresh canonical test Evidence is recorded.
+          MD
+
+          # Deliberately declare no verification gaps at all, despite ui-interaction.
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-UI-GAP-COMPLETENESS
+          assessment:
+            source: codex
+            summary: "No explicit gaps are declared in this controlled completeness probe."
+          entries: []
+          YAML
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Verification Gap completeness characterization',
+            notes: 'Fresh Builder self-review; browser coverage is intentionally absent from this fixture.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `ui-gap answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          test ! -e "$CONSUMER/package.json.browser"
+          if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts['test:browser'] ? 0 : 1)"; then
+            echo "Unexpected test:browser script present"
+            exit 1
+          fi
+
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: Prove empty Gap Registry passes despite ui-interaction
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-UI-GAP-COMPLETENESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check | tee /tmp/ui-gap-check.log
+          grep -q '0 machine-covered, 0 human-covered, 0 uncovered' /tmp/ui-gap-check.log
+
+          test ! -e "$CONSUMER/docs/wip/$TASK_ID/browser-verification.json"
+          echo "CONFIRMED COMPLETENESS WINDOW: ui-interaction classification plus an empty entries array is accepted as 0 uncovered gaps."
+
+      - name: Produce only canonical non-browser Evidence
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-UI-GAP-COMPLETENESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify | tee /tmp/ui-gap-verify.log
+          grep -q '0 machine-covered, 0 human-covered, 0 uncovered' /tmp/ui-gap-verify.log
+
+          test ! -e "$CONSUMER/docs/wip/$TASK_ID/browser-verification.json"
+
+      - name: Prove UI Task Delivery does not require undeclared browser coverage
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-UI-GAP-COMPLETENESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/ui-gap-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/ui-gap-delivery.log
+          test ! -e "$CONSUMER/docs/wip/$TASK_ID/browser-verification.json"
+
+          echo "CONFIRMED VERIFICATION-COMPLETENESS GAP: current Verification Gap Registry validates declared entries but does not derive required dimensions from Task Classification. A ui-interaction L1 Task can declare no gaps, provide no browser script/proof, and still pass Delivery when canonical non-browser gates are fresh."
