@@ -166,25 +166,54 @@ Skill output structure is not semantic proof. After code/task content stabilizes
 
 Before recording machine Evidence, inspect verification dimensions that canonical `check/typecheck/test` do not automatically prove, such as browser interaction, visual layout, runtime integration, accessibility, performance behavior, or architecture boundaries when relevant to the Task.
 
-Create consumer `docs/wip/<TASK_ID>/verification-gaps.yaml` with an explicit assessment and entries using one of:
+Create consumer `docs/wip/<TASK_ID>/verification-gaps.yaml`:
 
-- `machine-covered`: declare one or more canonical `machine_gates`; the later `--verify` step requires those exact gates to have fresh canonical Evidence.
+- v1.0 remains valid for canonical machine gates only.
+- v1.1 may additionally use `machine_proofs: [browser]`.
+
+Coverage entries use one of:
+
+- `machine-covered`: declare one or more canonical `machine_gates`, supported `machine_proofs`, or both.
 - `human-covered`: include a real human coverage record with `source: human`, checker identity, timestamp, concrete procedure, and observed result. Builder Codex must never manufacture human provenance.
 - `uncovered`: record the remaining gap and why it is uncovered. Any uncovered entry blocks completion.
 
-Before Evidence, validate/finalize the registry structurally:
+Before machine verification, validate/finalize the registry structurally:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" <TASK_ID> --check
 ```
 
-The registry is governed task state and is intentionally included in the Evidence repository fingerprint. Do not edit it after machine Evidence without rerunning stale Evidence.
+The registry is governed task state and is intentionally included in the final canonical Evidence repository fingerprint. Do not edit it after machine verification without rerunning stale proofs/Evidence.
 
-If required human coverage is not yet available, stop at that human-verification boundary before final Evidence rather than fabricating it.
+If required human coverage is not yet available, stop at that human-verification boundary rather than fabricating it.
 
-## 13. Record canonical machine Evidence
+## 13. Run declared browser verification when required
 
-Determine the union of risk-required, verification-Skill-required, and registry machine coverage gates. Record the canonical gates that are actually required:
+If any machine-covered registry entry declares:
+
+```yaml
+machine_proofs:
+  - browser
+```
+
+then the consumer must already provide a real `package.json` script named `test:browser`. ACLH Engine does not install Playwright, Cypress, browsers, or other test dependencies into the consumer.
+
+Run the consumer-owned browser verifier:
+
+```bash
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/browser-verification.ts" <TASK_ID> --run
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/browser-verification.ts" <TASK_ID> --verify
+```
+
+The proof binds the exact `test:browser` script and consumer repository snapshot. A failing script or any governed repository mutation while it runs records FAIL. The browser proof excludes only its own output and later Evidence/Review outputs from its freshness calculation.
+
+If `test:browser` is missing, browser machine coverage is unavailable. Do not install a framework automatically and do not claim browser coverage. Use real human coverage when appropriate or leave the gap uncovered so delivery blocks.
+
+`browser-verification.json` remains governed Task state for canonical Evidence: do not edit or rerun it after final Evidence without refreshing stale Evidence.
+
+## 14. Record canonical machine Evidence
+
+Determine the union of risk-required, verification-Skill-required, and registry `machine_gates`. Record the canonical gates that are actually required:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" <TASK_ID> --gate <check|typecheck|test>
@@ -192,7 +221,7 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/evid
 
 External `check` executes the Engine checker against consumer source; `typecheck` and `test` execute consumer canonical npm scripts. Record only gates that truly ran.
 
-Then verify Evidence and registry coverage:
+Then verify Evidence and all registry machine coverage:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" <TASK_ID> --verify
@@ -200,9 +229,9 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skil
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" <TASK_ID> --verify
 ```
 
-The Gap Registry does not create a second PASS. `machine-covered` only succeeds by consuming fresh canonical Evidence.
+The Gap Registry does not create a second PASS. Canonical machine coverage consumes canonical Evidence; browser machine coverage consumes the fresh browser proof.
 
-## 14. Review, managed handoff, and delivery boundary
+## 15. Review, managed handoff, and delivery boundary
 
 When risk requires Builder self-review:
 
@@ -230,8 +259,8 @@ After required independent review exists:
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" <TASK_ID>
 ```
 
-Delivery re-verifies Context readiness, Scope, Context, Verification Gap coverage, Evidence, and trust gates. If a changed Resync report exists, it also requires the matching fresh Skill Re-plan checkpoint. Successful Delivery records a fresh managed checkpoint.
+Delivery re-verifies Context readiness, Scope, Context, Verification Gap coverage, Evidence, browser proof when declared, and trust gates. If a changed Resync report exists, it also requires the matching fresh Skill Re-plan checkpoint. Successful Delivery records a fresh managed checkpoint.
 
-## 15. Completion report
+## 16. Completion report
 
-Report concrete state only: Task/branch, implementation summary, Classification, selected/resolved Skills, Context bootstrap/readiness/Scope state, Verification Gap coverage, handoff/Re-plan state, machine gates actually recorded, and delivery result or exact human/independent-review boundary still pending.
+Report concrete state only: Task/branch, implementation summary, Classification, selected/resolved Skills, Context bootstrap/readiness/Scope state, Verification Gap coverage, browser proof state when applicable, handoff/Re-plan state, machine gates actually recorded, and delivery result or exact human/independent-review boundary still pending.
