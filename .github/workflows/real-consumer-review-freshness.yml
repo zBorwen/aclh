@@ -1,0 +1,261 @@
+name: Real Consumer Review Freshness Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-review-freshness:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout real consumer baseline
+        uses: actions/checkout@v4
+        with:
+          repository: zBorwen/playwright-demo
+          ref: main
+          path: consumer
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          npm install
+          corepack enable
+          corepack prepare pnpm@10 --activate
+          cd consumer
+          pnpm install --frozen-lockfile
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+          git switch -c agent/issue-review-freshness-validation
+          git fetch origin agent/issue-management-p4-test
+
+      - name: Build a managed real-consumer task with self-review
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-REVIEW-FRESHNESS
+        run: |
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L2 --strategy tdd
+          TASK_DIR="$ACLH_PROJECT_ROOT/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-ISSUE-REVIEW-FRESHNESS
+          classification:
+            primary: feature
+            traits: [behavior-change, cross-module, schema-change, ui-interaction]
+            confidence: high
+            rationale:
+              - "Exercise review freshness on the real Issue consumer task."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-ISSUE-REVIEW-FRESHNESS
+          classification:
+            ref: classification.yaml
+          selected:
+            - change-impact-analysis
+            - regression-verification
+            - task-decomposition
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          cd "$ACLH_PROJECT_ROOT"
+          git merge --squash origin/agent/issue-management-p4-test
+          rm -rf .agents/skills/aclh-task
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/codex-integration.ts" attach --project "$ACLH_PROJECT_ROOT"
+
+          mkdir -p .harness/project
+          cat > .harness/project/profile.yaml <<'YAML'
+          project:
+            name: "playwright-demo"
+            description: "Existing TypeScript monorepo used as a real ACLH consumer."
+            type: "fullstack"
+            maturity: "existing"
+          tech_stack:
+            language: "TypeScript"
+            framework: "React + Hono"
+            testing: "Vitest + Playwright"
+            package_manager: "pnpm"
+          YAML
+          cat > .harness/project/architecture.yaml <<'YAML'
+          modules:
+            - name: SharedContracts
+              path: "packages/shared"
+              responsibility: "Cross-package contracts."
+              depends_on: []
+            - name: Server
+              path: "packages/server"
+              responsibility: "Hono API and persistence."
+              depends_on: [SharedContracts]
+            - name: Frontend
+              path: "packages/frontend"
+              responsibility: "React Issue UI."
+              depends_on: [SharedContracts, Server]
+          boundaries:
+            rules:
+              - "Shared contracts do not depend on consumers."
+          YAML
+
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] Issue consumer task is represented by ACLH artifacts.
+          - [x] Review freshness can be tested after an out-of-band commit.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Establish managed baseline.
+          - [x] Capture self-review and independent-review fixture.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Verify reviews before the handoff.
+          - [x] Verify review freshness behavior after a human commit.
+
+          ## Verification Strategy
+
+          strategy: tdd
+          - [x] RED: capture old review state
+          - [x] GREEN: detect stale review semantics
+          - [x] REFACTOR: keep validation outside product Runtime
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Initialized real-consumer review freshness validation.
+          MD
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Review freshness validation fixture',
+            notes: 'Builder self-review recorded against the managed baseline before the human handoff.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `baseline answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+
+          git add -- .github package.json packages playwright.config.ts tests .harness/project "docs/wip/$TASK_ID"
+          git commit -m "managed: establish review freshness baseline"
+
+      - name: Capture a snapshot-bound independent review fixture
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-REVIEW-FRESHNESS
+        run: |
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/independent-review.ts" "$TASK_ID" --prepare
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const dir = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}`;
+          const packet = fs.readFileSync(`${dir}/review-packet.md`, 'utf8');
+          const commit = packet.match(/^- commit: ([0-9a-f]{40})$/m)?.[1];
+          const worktree = packet.match(/^- worktree: ([0-9a-f]{64})$/m)?.[1];
+          if (!commit || !worktree) throw new Error('review packet snapshot missing');
+          const fixture = {
+            version: '1.0',
+            task_id: process.env.TASK_ID,
+            builder: { session_id: 'builder-validation-fixture' },
+            reviewer: { kind: 'codex-fresh-context', session_id: 'review-validation-fixture' },
+            repository: { commit_sha: commit, worktree_sha256: worktree },
+            reviewed_at: new Date().toISOString(),
+            verdict: 'PASS',
+            findings: [],
+            notes: 'Synthetic validation fixture used only to exercise independent-review snapshot freshness.',
+          };
+          fs.writeFileSync(`${dir}/independent-review.json`, `${JSON.stringify(fixture, null, 2)}\n`);
+          NODE
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/independent-review.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --record
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/review-baseline.json
+          grep -q '"status": "clean"' /tmp/review-baseline.json
+
+      - name: Simulate human out-of-band contract change
+        env:
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+        run: |
+          cd "$ACLH_PROJECT_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file = 'packages/shared/src/types/issues.ts';
+          let source = fs.readFileSync(file, 'utf8');
+          const anchor = '  updatedAt: string;\n}';
+          if (!source.includes(anchor)) throw new Error('Issue contract anchor not found');
+          source = source.replace(anchor, "  updatedAt: string;\n  source?: 'manual' | 'imported';\n}");
+          fs.writeFileSync(file, source);
+          NODE
+          git add packages/shared/src/types/issues.ts
+          git commit -m "human: change Issue contract after reviews"
+
+      - name: Prepare Resync and confirm both reviews require refresh
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-REVIEW-FRESHNESS
+        run: |
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/resync.ts" "$TASK_ID" --prepare --json | tee /tmp/review-resync.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('/tmp/review-resync.json', 'utf8'));
+          if (!report.requirements.self_review_refresh) throw new Error('Resync failed to require self-review refresh');
+          if (!report.requirements.independent_review_refresh) throw new Error('Resync failed to require independent-review refresh');
+          if (!report.changes.committed_since_checkpoint.includes('packages/shared/src/types/issues.ts')) throw new Error('human delta not isolated');
+          NODE
+
+      - name: Compare actual review freshness enforcement
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-REVIEW-FRESHNESS
+        run: |
+          # Current self-review validator is expected to ACCEPT the old structural record.
+          # This step intentionally treats that acceptance as confirmation of the freshness gap.
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID" | tee /tmp/self-review-after-human.log
+          grep -q 'Adversarial Self-Review' /tmp/self-review-after-human.log
+
+          # Independent review must reject the old snapshot-bound record.
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/independent-review.ts" "$TASK_ID" --verify > /tmp/independent-after-human.log 2>&1
+          independent_status=$?
+          set -e
+          test "$independent_status" -ne 0
+          grep -q 'independent review is stale for the current repository snapshot' /tmp/independent-after-human.log
+
+          echo "CONFIRMED GAP: Resync requires self-review refresh, but self-review.ts still accepts the pre-handoff record because it is not repository-snapshot-bound."
+          echo "CONFIRMED CONTROL: independent-review.ts correctly rejects its pre-handoff record as stale."
