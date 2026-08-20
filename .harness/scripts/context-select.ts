@@ -185,6 +185,7 @@ if (EXTERNAL_MODE || fs.existsSync(scopePath)) {
       explicitModules: stateModules,
       explicitTags: stateTags,
       explicitFiles: stateFiles,
+      architecturePath: path.join(PROJECT_DIR, 'architecture.yaml'),
     });
     verifyContextScopeFresh(current, recorded);
     scopeArtifact = recorded;
@@ -194,7 +195,8 @@ if (EXTERNAL_MODE || fs.existsSync(scopePath)) {
   }
 }
 
-const explicitModules = scopeArtifact ? scopeArtifact.scope.modules : stateModules;
+const explicitModules = scopeArtifact ? scopeArtifact.basis.explicit_scope.modules : stateModules;
+const scopeModules = scopeArtifact ? scopeArtifact.scope.modules : stateModules;
 const tags = scopeArtifact ? scopeArtifact.scope.tags : stateTags;
 const explicitFiles = scopeArtifact ? scopeArtifact.basis.explicit_scope.files : stateFiles;
 
@@ -243,15 +245,18 @@ if (scopeArtifact) {
 
 const architecture = loadProjectYaml('architecture.yaml') as { modules?: unknown };
 const moduleDefs = Array.isArray(architecture.modules) ? architecture.modules as ModuleDef[] : [];
-const selectedNames = new Set(explicitModules);
-for (const mod of moduleDefs) {
-  const name = typeof mod.name === 'string' ? mod.name : '';
-  const modulePath = typeof mod.path === 'string' ? normalize(mod.path).replace(/\/$/,'') : '';
-  if (name && modulePath && effectiveFiles.some(file=>file===modulePath||file.startsWith(`${modulePath}/`))) selectedNames.add(name);
-}
-for (const mod of moduleDefs) {
-  if (typeof mod.name !== 'string' || !selectedNames.has(mod.name)) continue;
-  for (const dep of arrayOfStrings(mod.depends_on)) selectedNames.add(dep);
+const selectedNames = new Set(scopeModules);
+if (!scopeArtifact) {
+  for (const mod of moduleDefs) {
+    const name = typeof mod.name === 'string' ? mod.name : '';
+    const modulePath = typeof mod.path === 'string' ? normalize(mod.path).replace(/\/$/,'') : '';
+    if (name && modulePath && effectiveFiles.some(file=>file===modulePath||file.startsWith(`${modulePath}/`))) selectedNames.add(name);
+  }
+  const legacySeed = new Set(selectedNames);
+  for (const mod of moduleDefs) {
+    if (typeof mod.name !== 'string' || !legacySeed.has(mod.name)) continue;
+    for (const dep of arrayOfStrings(mod.depends_on)) selectedNames.add(dep);
+  }
 }
 const selectedModules = moduleDefs.filter(mod=>typeof mod.name==='string'&&selectedNames.has(mod.name));
 const selectedModuleNames = new Set(selectedModules.map(mod=>String(mod.name)));
