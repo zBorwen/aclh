@@ -1,0 +1,253 @@
+name: Human Verification Gap Freshness Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-human-gap-freshness:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Create UI Task and record synthetic human coverage before the final UI change
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-HUMAN-GAP-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+
+          CONSUMER="$RUNNER_TEMP/aclh-human-gap-consumer"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src/components"
+          cd "$CONSUMER"
+          git init -b agent/human-gap-freshness
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-human-gap-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          cat > src/components/Panel.tsx <<'TS'
+          export function Panel() {
+            return 'baseline UI';
+          }
+          TS
+          git add .
+          git commit -m "initial UI consumer"
+
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-HUMAN-GAP-FRESHNESS
+          classification:
+            primary: feature
+            traits: [behavior-change, ui-interaction]
+            confidence: high
+            rationale:
+              - "Exercise freshness of a human-covered UI verification gap."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-HUMAN-GAP-FRESHNESS
+          classification:
+            ref: classification.yaml
+          selected:
+            - regression-verification
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          # Synthetic validator fixture only. This is NOT represented as a genuine human review.
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-HUMAN-GAP-FRESHNESS
+          assessment:
+            source: codex
+            summary: "A synthetic human-covered UI entry is recorded before the final code mutation to probe freshness enforcement."
+          entries:
+            - id: ui-visual-check
+              dimension: browser-interaction
+              description: "Check the visible Panel state in a browser."
+              status: human-covered
+              human:
+                source: human
+                checked_by: "synthetic-validator-fixture"
+                checked_at: "2026-08-20T00:00:00.000Z"
+                procedure: "Synthetic fixture: inspect the baseline Panel UI before the later code mutation."
+                result: "Synthetic fixture recorded as passing on the baseline UI."
+          YAML
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check | tee /tmp/human-gap-before-change.log
+          grep -q '1 human-covered' /tmp/human-gap-before-change.log
+
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: Mutate the UI after the human coverage record
+        env:
+          TASK_ID: TASK-HUMAN-GAP-FRESHNESS
+        run: |
+          cd "$CONSUMER"
+          cat > src/components/Panel.tsx <<'TS'
+          export function Panel() {
+            return 'final UI changed after human check';
+          }
+          TS
+
+          grep -q 'final UI changed after human check' src/components/Panel.tsx
+          grep -q '2026-08-20T00:00:00.000Z' "docs/wip/$TASK_ID/verification-gaps.yaml"
+          test ! -e "docs/wip/$TASK_ID/browser-verification.json"
+
+          echo "CONFIRMED PROBE: UI changed after the synthetic human coverage timestamp; the human record itself was not updated."
+
+      - name: Refresh all machine/context/self-review state after the final UI change
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-HUMAN-GAP-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] Change the user-visible Panel state.
+          - [x] Characterize human verification freshness enforcement.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Record a synthetic human UI check before the final mutation.
+          - [x] Refresh all non-human trust artifacts after the mutation.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Canonical check/typecheck/test gates.
+
+          ## Verification Strategy
+
+          strategy: tdd
+
+          - [x] RED: human proof predates final UI state
+          - [x] GREEN: characterize current freshness validation
+          - [x] REFACTOR: keep the human record unchanged
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Final UI state changed after the synthetic human verification record.
+          MD
+          cat > "$TASK_DIR/regression-verification.md" <<'MD'
+          # Regression Scenarios
+          - Canonical consumer tests remain green after the UI change.
+
+          # Observable Behavior
+          - Panel now exposes the final changed UI state.
+
+          # Test Coverage
+          - Canonical non-browser machine test is green; the browser-interaction gap is declared human-covered.
+
+          # Evidence
+          - Fresh canonical test Evidence is required.
+          MD
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Human verification gap freshness validation',
+            notes: 'Fresh Builder self-review after the final UI change; synthetic human gap record intentionally predates it.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `human-gap answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+
+      - name: Prove stale human-covered gap still verifies
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-HUMAN-GAP-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify | tee /tmp/human-gap-after-change.log
+          grep -q '1 human-covered' /tmp/human-gap-after-change.log
+          grep -q '2026-08-20T00:00:00.000Z' "$CONSUMER/docs/wip/$TASK_ID/verification-gaps.yaml"
+          grep -q 'final UI changed after human check' "$CONSUMER/src/components/Panel.tsx"
+          test ! -e "$CONSUMER/docs/wip/$TASK_ID/browser-verification.json"
+
+          echo "CONFIRMED FRESHNESS GAP: human-covered verification is structurally accepted after the governed UI changed, with no repository snapshot/epoch binding and no browser proof."
+
+      - name: Prove Delivery accepts the pre-change human verification record
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-HUMAN-GAP-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/human-gap-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/human-gap-delivery.log
+          grep -q '2026-08-20T00:00:00.000Z' "docs/wip/$TASK_ID/verification-gaps.yaml"
+          test ! -e "docs/wip/$TASK_ID/browser-verification.json"
+
+          echo "CONFIRMED GOVERNANCE GAP: L1 Delivery accepts a human-covered UI verification record that predates the final UI code state; human coverage currently proves record structure, not snapshot freshness."
