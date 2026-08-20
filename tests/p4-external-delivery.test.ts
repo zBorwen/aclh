@@ -33,6 +33,7 @@ function createConsumer(): string {
     scripts: {
       typecheck: 'node -e "process.exit(0)"',
       test: 'node -e "process.exit(0)"',
+      'test:browser': 'node -e "process.exit(0)"',
     },
   }, null, 2)}\n`);
   git(root, ['add', '.']);
@@ -121,16 +122,27 @@ test('external L2 consumer passes the complete P3 delivery chain without embedde
     assert.equal(contextVerify.status, 0, contextVerify.stderr || contextVerify.stdout);
 
     fs.writeFileSync(path.join(taskDir, 'verification-gaps.yaml'), stringifyYaml({
-      version: '1.0', task_id: taskId,
-      assessment: { source: 'codex', summary: 'Behavioral regression is covered by the canonical test gate.' },
-      entries: [{
-        id: 'behavior-regression', dimension: 'behavior-regression',
-        description: 'Verify the external lifecycle regression behavior.', status: 'machine-covered',
-        machine_gates: ['test'],
-      }],
+      version: '1.1', task_id: taskId,
+      assessment: { source: 'codex', summary: 'Behavioral regression and browser interaction have explicit machine coverage.' },
+      entries: [
+        {
+          id: 'behavior-regression', dimension: 'behavior-regression',
+          description: 'Verify the external lifecycle regression behavior.', status: 'machine-covered',
+          machine_gates: ['test'],
+        },
+        {
+          id: 'browser-interaction', dimension: 'browser-interaction',
+          description: 'Exercise the consumer browser verification path.', status: 'machine-covered',
+          machine_proofs: ['browser'],
+        },
+      ],
     }));
     const gapCheck = run(projectRoot, 'verification-gaps.ts', [taskId, '--check']);
     assert.equal(gapCheck.status, 0, gapCheck.stderr || gapCheck.stdout);
+
+    const browserRun = run(projectRoot, 'browser-verification.ts', [taskId, '--run']);
+    assert.equal(browserRun.status, 0, browserRun.stderr || browserRun.stdout);
+    assert.equal(run(projectRoot, 'browser-verification.ts', [taskId, '--verify']).status, 0);
 
     for (const gate of ['check', 'typecheck', 'test']) {
       const evidence = run(projectRoot, 'evidence.ts', [taskId, '--gate', gate]);
