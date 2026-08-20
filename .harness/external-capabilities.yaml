@@ -1,6 +1,6 @@
 version: "1.0"
 external_mode:
-  status: verification-gaps-ready
+  status: browser-verification-ready
   commands:
     init-task: supported
     classification: supported
@@ -13,6 +13,7 @@ external_mode:
     verification-plan: supported
     skill-output: supported
     verification-gaps: supported
+    browser-verification: supported
     evidence: supported
     skill-evidence: supported
     self-review: supported
