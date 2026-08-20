@@ -1,0 +1,365 @@
+name: Re-plan Second Handoff Freshness Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-repeated-handoff:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Establish a complete managed L1 external baseline
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-REPLAN-SECOND-HANDOFF
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+
+          CONSUMER="$RUNNER_TEMP/aclh-replan-second-handoff"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src"
+          cd "$CONSUMER"
+          git init -b agent/replan-second-handoff
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-replan-second-handoff",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          echo 'export const value = 1;' > src/value.ts
+          git add .
+          git commit -m "initial consumer"
+
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-REPLAN-SECOND-HANDOFF
+          classification:
+            primary: feature
+            traits: [behavior-change]
+            confidence: high
+            rationale:
+              - "Exercise repeated human handoff and Skill Re-plan freshness on an isolated external consumer."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-REPLAN-SECOND-HANDOFF
+          classification:
+            ref: classification.yaml
+          selected:
+            - regression-verification
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          echo 'export const value = 2;' > src/value.ts
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] The managed L1 change has machine regression coverage.
+          - [x] Repeated human handoffs must not reuse a stale Re-plan decision.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Establish a managed baseline.
+          - [x] Resync the first human handoff.
+          - [x] Validate freshness on a second human handoff.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Canonical check/typecheck/test gates.
+
+          ## Verification Strategy
+
+          strategy: tdd
+
+          - [x] RED: repeated handoff freshness window identified
+          - [x] GREEN: each downstream verification is refreshed
+          - [x] REFACTOR: isolate Re-plan/Resync semantics from other gates
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Managed baseline established for repeated handoff validation.
+          MD
+          cat > "$TASK_DIR/regression-verification.md" <<'MD'
+          # Regression Scenarios
+          - The isolated consumer remains machine-verifiable after each value change.
+
+          # Observable Behavior
+          - Canonical test stays green while governance freshness changes.
+
+          # Test Coverage
+          - The consumer test command is the regression machine gate.
+
+          # Evidence
+          - Fresh canonical test Evidence is required at each Delivery.
+          MD
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-REPLAN-SECOND-HANDOFF
+          assessment:
+            source: codex
+            summary: "The isolated behavior regression is covered by the canonical test gate."
+          entries:
+            - id: behavior-regression
+              dimension: behavior-regression
+              description: "Verify the isolated consumer after each handoff."
+              status: machine-covered
+              machine_gates: [test]
+          YAML
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Repeated handoff freshness baseline',
+            notes: 'Fresh Builder self-review for the managed baseline.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `baseline answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+
+          git add src "docs/wip/$TASK_ID"
+          git commit -m "managed: establish repeated-handoff baseline"
+
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/baseline-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/baseline-delivery.log
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/baseline-managed.json
+          grep -q '"status": "clean"' /tmp/baseline-managed.json
+
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: First human handoff gets a real Resync and Re-plan
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-REPLAN-SECOND-HANDOFF
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          echo 'export const value = 3;' > src/value.ts
+          git add src/value.ts
+          git commit -m "human: first out-of-band value change"
+          FIRST_HUMAN_SHA=$(git rev-parse HEAD)
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/first-handoff-status.json || test $? -eq 2
+          grep -q '"status": "changed"' /tmp/first-handoff-status.json
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/resync.ts" "$TASK_ID" --prepare --json | tee /tmp/first-resync.json
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --record unchanged --source codex
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --verify
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('/tmp/first-resync.json', 'utf8'));
+          if (!report.changes.committed_since_checkpoint.includes('src/value.ts')) throw new Error('first handoff delta missing');
+          if (report.changes.committed_since_checkpoint.includes('src/second.ts')) throw new Error('future second handoff unexpectedly present');
+          NODE
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'First handoff reviewed after Resync',
+            notes: 'Fresh Builder self-review after the first human handoff.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `first-handoff answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/first-handoff-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/first-handoff-delivery.log
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/first-handoff-clean.json
+          grep -q '"status": "clean"' /tmp/first-handoff-clean.json
+
+          cp "$CONSUMER/.git/aclh/resync/$TASK_ID.json" /tmp/resync-after-first-delivery.json
+          cp "$CONSUMER/.git/aclh/replan/$TASK_ID.json" /tmp/replan-after-first-delivery.json
+          echo "FIRST_HUMAN_SHA=$FIRST_HUMAN_SHA" >> "$GITHUB_ENV"
+
+      - name: Second human handoff deliberately skips Resync and Re-plan
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-REPLAN-SECOND-HANDOFF
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          echo 'export const second = true;' > src/second.ts
+          git add src/second.ts
+          git commit -m "human: second out-of-band change after completed Resync"
+          SECOND_HUMAN_SHA=$(git rev-parse HEAD)
+
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/second-handoff-status.json
+          snapshot_status=${PIPESTATUS[0]}
+          set -e
+          test "$snapshot_status" -eq 2
+          grep -q '"status": "changed"' /tmp/second-handoff-status.json
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/.git/aclh/resync/${process.env.TASK_ID}.json`, 'utf8'));
+          const currentHead = process.env.SECOND_HUMAN_SHA;
+          if (report.current.commit_sha === currentHead) throw new Error('Resync report unexpectedly refreshed for second handoff');
+          if (report.changes.committed_since_checkpoint.includes('src/second.ts')) throw new Error('old Resync report unexpectedly contains second handoff');
+          NODE
+
+          # This is the core freshness probe: the old Re-plan is still accepted even though
+          # managed-snapshot says the governed repository changed again.
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --verify | tee /tmp/stale-replan-verify.log
+          grep -q 'Skill Re-plan PASS' /tmp/stale-replan-verify.log
+
+          echo "SECOND_HUMAN_SHA=$SECOND_HUMAN_SHA" >> "$GITHUB_ENV"
+
+      - name: Refresh downstream verification without refreshing Resync or Re-plan
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-REPLAN-SECOND-HANDOFF
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Second handoff downstream verification refreshed',
+            notes: 'Builder self-review was explicitly refreshed after the second human handoff; Resync/Re-plan were intentionally not refreshed.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `second-handoff answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+
+          # Old Re-plan still verifies after all current-state downstream gates are refreshed.
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --verify | tee /tmp/replan-before-second-delivery.log
+          grep -q 'Skill Re-plan PASS' /tmp/replan-before-second-delivery.log
+
+      - name: Prove second handoff can currently Delivery with the first handoff Re-plan
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-REPLAN-SECOND-HANDOFF
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/second-handoff-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/second-handoff-delivery.log
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/second-delivery-clean.json
+          grep -q '"status": "clean"' /tmp/second-delivery-clean.json
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/.git/aclh/resync/${process.env.TASK_ID}.json`, 'utf8'));
+          const replan = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/.git/aclh/replan/${process.env.TASK_ID}.json`, 'utf8'));
+          const currentHead = process.env.SECOND_HUMAN_SHA;
+          if (report.current.commit_sha === currentHead) throw new Error('Delivery unexpectedly refreshed Resync');
+          if (replan.resync.commit_sha === currentHead) throw new Error('Delivery unexpectedly refreshed Re-plan');
+          if (report.changes.committed_since_checkpoint.includes('src/second.ts')) throw new Error('stale Resync unexpectedly learned second handoff');
+          NODE
+
+          echo "CONFIRMED GOVERNANCE GAP: after a completed first Resync/Re-plan/Delivery cycle, a second human handoff can refresh Context/Evidence/self-review and pass Delivery while reusing the first handoff's stale Resync/Re-plan checkpoint."
