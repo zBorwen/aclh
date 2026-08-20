@@ -1,0 +1,336 @@
+name: Real Consumer Handoff Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-handoff-resync:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout real consumer baseline
+        uses: actions/checkout@v4
+        with:
+          repository: zBorwen/playwright-demo
+          ref: main
+          path: consumer
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Prepare consumer
+        run: |
+          corepack enable
+          corepack prepare pnpm@10 --activate
+          cd consumer
+          pnpm install --frozen-lockfile
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+          git switch -c agent/issue-management-handoff-validation
+          git fetch origin agent/issue-management-p4-test
+
+      - name: Initialize managed Task and capture current external CI identity behavior
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-HANDOFF-REAL
+        run: |
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L2 --strategy tdd
+
+          actual_branch=$(git -C "$ACLH_PROJECT_ROOT" branch --show-current)
+          recorded_branch=$(node --input-type=module -e "import fs from 'node:fs'; import { parse } from 'yaml'; const s=parse(fs.readFileSync(process.env.ACLH_PROJECT_ROOT + '/docs/wip/' + process.env.TASK_ID + '/.state.yaml','utf8')); console.log(s.identity.branch)")
+          echo "consumer branch: $actual_branch"
+          echo "recorded task branch: $recorded_branch"
+          test "$actual_branch" = "agent/issue-management-handoff-validation"
+          test "$recorded_branch" = "validation/real-consumer-handoff-p4"
+          test "$recorded_branch" != "$actual_branch"
+
+          TASK_DIR="$ACLH_PROJECT_ROOT/docs/wip/$TASK_ID"
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-ISSUE-HANDOFF-REAL
+          classification:
+            primary: feature
+            traits:
+              - behavior-change
+              - cross-module
+              - schema-change
+              - ui-interaction
+            confidence: high
+            rationale:
+              - "Adds Issue management across shared contracts, server persistence/API, and frontend UI."
+            ambiguities:
+              - "Authentication and multi-user identity are outside this validation task."
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-ISSUE-HANDOFF-REAL
+          classification:
+            ref: classification.yaml
+          selected:
+            - change-impact-analysis
+            - regression-verification
+            - task-decomposition
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+      - name: Apply validated Issue Builder work and attach thin Adapter
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+        run: |
+          cd "$ACLH_PROJECT_ROOT"
+          git merge --squash origin/agent/issue-management-p4-test
+          rm -rf .agents/skills/aclh-task
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/codex-integration.ts" attach --project "$ACLH_PROJECT_ROOT"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/codex-integration.ts" status --project "$ACLH_PROJECT_ROOT" | tee /tmp/aclh-status.json
+          grep -q '"mode": "external"' /tmp/aclh-status.json
+          grep -q '"attached": true' /tmp/aclh-status.json
+          test ! -e "$ACLH_PROJECT_ROOT/.harness/scripts"
+          test ! -e "$ACLH_PROJECT_ROOT/.harness/skills"
+
+      - name: Author initial real-project Context and capture fresh managed baseline
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-HANDOFF-REAL
+        run: |
+          mkdir -p "$ACLH_PROJECT_ROOT/.harness/project"
+          cat > "$ACLH_PROJECT_ROOT/.harness/project/profile.yaml" <<'YAML'
+          project:
+            name: "playwright-demo"
+            description: "Existing TypeScript monorepo with React frontend, Hono server, shared contracts, and Playwright tooling."
+            repo: "zBorwen/playwright-demo"
+            type: "fullstack"
+            maturity: "existing"
+          tech_stack:
+            language: "TypeScript"
+            framework: "React + Hono"
+            build_tool: "Vite"
+            state_management: "React state"
+            styling: "Tailwind CSS"
+            testing: "Vitest + Playwright"
+            package_manager: "pnpm"
+            node_version: "22"
+          commands:
+            install: "pnpm install --frozen-lockfile"
+            test: "pnpm test"
+          YAML
+
+          cat > "$ACLH_PROJECT_ROOT/.harness/project/architecture.yaml" <<'YAML'
+          modules:
+            - name: SharedContracts
+              path: "packages/shared"
+              responsibility: "Cross-package TypeScript contracts and schemas."
+              depends_on: []
+            - name: Server
+              path: "packages/server"
+              responsibility: "Hono API, services, persistence, and runtime integration."
+              depends_on: [SharedContracts]
+            - name: Frontend
+              path: "packages/frontend"
+              responsibility: "React application and browser-facing Issue workspace."
+              depends_on: [SharedContracts, Server]
+            - name: Agent
+              path: "packages/agent"
+              responsibility: "Existing automation agent package outside the Issue task scope."
+              depends_on: [SharedContracts]
+          boundaries:
+            rules:
+              - "Frontend consumes server APIs rather than persistence directly."
+              - "Shared contracts must not depend on frontend or server implementations."
+            dependency_direction:
+              - "Frontend -> Server -> SharedContracts"
+          YAML
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+
+          cd "$ACLH_PROJECT_ROOT"
+          git add -- .agents .github package.json packages playwright.config.ts tests .harness/project "docs/wip/$TASK_ID"
+          git commit -m "managed: establish issue task baseline"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --record
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/managed-clean.json
+          grep -q '"status": "clean"' /tmp/managed-clean.json
+
+      - name: Simulate a human out-of-band shared contract commit
+        env:
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+        run: |
+          cd "$ACLH_PROJECT_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file = 'packages/shared/src/types/issues.ts';
+          let source = fs.readFileSync(file, 'utf8');
+          const before = '  updatedAt: string;\n}';
+          if (!source.includes(before)) throw new Error('Issue contract anchor not found');
+          source = source.replace(before, "  updatedAt: string;\n  source?: 'manual' | 'imported';\n}");
+          fs.writeFileSync(file, source);
+          NODE
+          git add -- packages/shared/src/types/issues.ts
+          git commit -m "human: add additive Issue source contract"
+
+      - name: Detect changed handoff and prepare deterministic Resync
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-HANDOFF-REAL
+        run: |
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/managed-changed.json
+          snapshot_status=${PIPESTATUS[0]}
+          set -e
+          test "$snapshot_status" -eq 2
+          grep -q '"status": "changed"' /tmp/managed-changed.json
+          grep -q '"commit_changed": true' /tmp/managed-changed.json
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/resync.ts" "$TASK_ID" --prepare --json | tee /tmp/resync.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('/tmp/resync.json', 'utf8'));
+          if (report.status !== 'changed') throw new Error('Resync did not report changed');
+          if (!report.changes.committed_since_checkpoint.includes('packages/shared/src/types/issues.ts')) throw new Error('Human contract commit missing from committed_since_checkpoint');
+          if (!report.requirements.preserve_classification) throw new Error('Classification preservation not required');
+          if (!report.requirements.skill_plan_review) throw new Error('Skill Plan review not required');
+          if (!report.requirements.context_scope_refresh) throw new Error('Context Scope refresh not required');
+          if (!report.requirements.context_refresh) throw new Error('Context refresh not required');
+          if (!report.requirements.evidence_refresh) throw new Error('Evidence refresh not required');
+          NODE
+
+      - name: Prove old Scope Context and Evidence are stale after the human commit
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-HANDOFF-REAL
+        run: |
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify > /tmp/stale-scope.log 2>&1
+          scope_status=$?
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify > /tmp/stale-context.log 2>&1
+          context_status=$?
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify > /tmp/stale-evidence.log 2>&1
+          evidence_status=$?
+          set -e
+
+          test "$scope_status" -ne 0
+          test "$context_status" -ne 0
+          test "$evidence_status" -ne 0
+          grep -q 'stale' /tmp/stale-scope.log
+          grep -q 'Context Scope invalid or stale\|context.json is stale' /tmp/stale-context.log
+          grep -q 'check: stale evidence' /tmp/stale-evidence.log
+
+      - name: Re-plan Skills for the shared contract change
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-HANDOFF-REAL
+        run: |
+          TASK_DIR="$ACLH_PROJECT_ROOT/docs/wip/$TASK_ID"
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-ISSUE-HANDOFF-REAL
+          classification:
+            ref: classification.yaml
+          selected:
+            - change-impact-analysis
+            - compatibility-verification
+            - regression-verification
+            - task-decomposition
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --record changed --source codex
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --verify
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify | tee /tmp/classification-after-resync.log
+          grep -q 'feature' /tmp/classification-after-resync.log
+
+      - name: Prove new required Context blocks until Decisions exist
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-HANDOFF-REAL
+        run: |
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify --json | tee /tmp/readiness-blocked.json
+          readiness_status=${PIPESTATUS[0]}
+          set -e
+          test "$readiness_status" -ne 0
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('/tmp/readiness-blocked.json', 'utf8'));
+          if (report.ready !== false) throw new Error('Readiness should be blocked');
+          if (!report.blockers.includes('decisions')) throw new Error('Decisions should be a required blocker after compatibility-verification');
+          NODE
+
+          cat > "$ACLH_PROJECT_ROOT/.harness/project/decisions.yaml" <<'YAML'
+          entries:
+            - id: issue-contract-additive-compatibility
+              module: SharedContracts
+              category: compatibility
+              applies_to:
+                - packages/shared/src/types/issues.ts
+              decision: "Issue contract additions remain additive and optional unless a migration explicitly changes compatibility expectations."
+              rationale: "Existing frontend, server, and external consumers should continue to accept previously valid Issue payloads."
+          YAML
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify --json | tee /tmp/readiness-ready.json
+          grep -q '"ready": true' /tmp/readiness-ready.json
+
+      - name: Refresh Scope and Context for the Resync and verify bounded retrieval
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-HANDOFF-REAL
+        run: |
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --verify
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const root = process.env.ACLH_PROJECT_ROOT;
+          const task = process.env.TASK_ID;
+          const context = JSON.parse(fs.readFileSync(`${root}/docs/wip/${task}/context.json`, 'utf8'));
+          if (!context.skills.includes('compatibility-verification')) throw new Error('Refreshed Context missing compatibility-verification');
+          const decisions = context.selected.decisions;
+          if (!decisions || decisions.total_matches < 1 || decisions.items.length < 1) throw new Error('Compatibility decision was not retrieved into bounded Context');
+          const scope = JSON.parse(fs.readFileSync(`${root}/docs/wip/${task}/context-scope.json`, 'utf8'));
+          if (!scope.scope.modules.includes('SharedContracts')) throw new Error('SharedContracts missing from refreshed Scope');
+          NODE
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate check
+
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/managed-still-changed.json
+          final_snapshot_status=${PIPESTATUS[0]}
+          set -e
+          test "$final_snapshot_status" -eq 2
+          grep -q '"status": "changed"' /tmp/managed-still-changed.json
+          echo "CONFIRMED: Resync refreshes governed state but does not silently create a new managed handoff anchor before Delivery."
