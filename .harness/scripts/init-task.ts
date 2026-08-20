@@ -2,8 +2,8 @@
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
+import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
 interface TemplateRef { src: string; dest: string; }
 interface GovernanceConfig {
@@ -13,11 +13,10 @@ interface GovernanceConfig {
   verification_strategies?: Record<string, { required_markers?: unknown }>;
 }
 
-const __filename: string = fileURLToPath(import.meta.url);
-const __dirname: string = path.dirname(__filename);
-const ROOT_DIR: string = path.resolve(__dirname, '../../');
-const HARNESS_DIR: string = path.join(ROOT_DIR, '.harness');
-const DOCS_DIR: string = path.join(ROOT_DIR, 'docs/wip');
+const roots = resolveRuntimeRoots(import.meta.url);
+const ROOT_DIR = roots.projectRoot;
+const HARNESS_DIR = roots.runtimeHarnessDir;
+const DOCS_DIR = roots.projectWipDir;
 
 function git(args: string[]): string {
   const result = spawnSync('git', args, { cwd: ROOT_DIR, encoding: 'utf8' });
@@ -44,7 +43,7 @@ if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId)) {
 }
 
 const governancePath = path.join(HARNESS_DIR, 'governance.yaml');
-if (!fs.existsSync(governancePath)) { console.error('Missing .harness/governance.yaml'); process.exit(1); }
+if (!fs.existsSync(governancePath)) { console.error(`Missing ACLH governance policy: ${governancePath}`); process.exit(1); }
 const governance = parseYaml(fs.readFileSync(governancePath, 'utf8')) as GovernanceConfig;
 const riskLevels = governance.risk_levels ?? {};
 const strategies = governance.verification_strategies ?? {};
@@ -80,6 +79,7 @@ if (!branch) {
   process.exit(1);
 }
 
+fs.mkdirSync(DOCS_DIR, { recursive: true });
 const taskDir: string = path.resolve(DOCS_DIR, taskId);
 const relativeTaskDir: string = path.relative(DOCS_DIR, taskDir);
 if (relativeTaskDir.startsWith('..') || path.isAbsolute(relativeTaskDir)) { console.error(`Invalid task path: ${taskId}`); process.exit(1); }
@@ -115,10 +115,10 @@ fs.writeFileSync(
 );
 createdFiles.push('changelog.md');
 
-const templatePath = path.join(DOCS_DIR, '.state-template.yaml');
+const templatePath = path.join(roots.runtimeRoot, 'docs/wip/.state-template.yaml');
 const now = new Date().toISOString();
 if (!fs.existsSync(templatePath)) {
-  console.error('Missing docs/wip/.state-template.yaml');
+  console.error(`Missing ACLH task state template: ${templatePath}`);
   fs.rmSync(taskDir, { recursive: true, force: true });
   process.exit(1);
 }
@@ -144,6 +144,6 @@ createdFiles.push('.state.yaml');
 fs.writeFileSync(path.join(taskDir, 'evidence.json'), `${JSON.stringify({ version: '1.1', task_id: taskId, updated_at: null, gates: {} }, null, 2)}\n`);
 createdFiles.push('evidence.json');
 
-console.log(`Task ${taskId} initialized at docs/wip/${taskId}/ (risk ${riskLevel}, strategy ${verificationStrategy}, branch ${branch})`);
+console.log(`Task ${taskId} initialized at ${path.relative(ROOT_DIR, taskDir).replaceAll('\\', '/')} (risk ${riskLevel}, strategy ${verificationStrategy}, branch ${branch})`);
 console.log('Files created:');
 for (const f of createdFiles) console.log(`  - ${f}`);
