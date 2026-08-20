@@ -58,6 +58,9 @@ test('resync reports the current task change set and required refreshes without 
     assert.equal(run(projectRoot, 'classification.ts', [taskId, '--verify']).status, 0);
     const resolve = run(projectRoot, 'skill-plan.ts', [taskId, '--resolve']);
     assert.equal(resolve.status, 0, resolve.stderr || resolve.stdout);
+
+    const scope = run(projectRoot, 'context-scope.ts', [taskId, '--generate']);
+    assert.equal(scope.status, 0, scope.stderr || scope.stdout);
     const context = run(projectRoot, 'context-select.ts', [taskId, '--generate']);
     assert.equal(context.status, 0, context.stderr || context.stdout);
     const evidence = run(projectRoot, 'evidence.ts', [taskId, '--gate', 'test']);
@@ -76,6 +79,7 @@ test('resync reports the current task change set and required refreshes without 
       requirements: {
         preserve_classification: boolean;
         skill_plan_review: boolean;
+        context_scope_refresh: boolean;
         context_refresh: boolean;
         evidence_refresh: boolean;
       };
@@ -85,11 +89,14 @@ test('resync reports the current task change set and required refreshes without 
     assert.ok(report.changes.current_worktree_files.includes('src/index.ts'));
     assert.equal(report.requirements.preserve_classification, true);
     assert.equal(report.requirements.skill_plan_review, true);
+    assert.equal(report.requirements.context_scope_refresh, true);
     assert.equal(report.requirements.context_refresh, true);
     assert.equal(report.requirements.evidence_refresh, true);
     assert.equal(fs.readFileSync(classificationPath, 'utf8'), classificationBefore);
     assert.equal(git(projectRoot, ['status', '--short']), statusBefore, 'Git-local resync report must not change project diff');
 
+    const staleScope = run(projectRoot, 'context-scope.ts', [taskId, '--verify']);
+    assert.notEqual(staleScope.status, 0, 'prepare must not silently refresh Scope');
     const staleContext = run(projectRoot, 'context-select.ts', [taskId, '--verify']);
     assert.notEqual(staleContext.status, 0, 'prepare must not silently refresh Context');
 
