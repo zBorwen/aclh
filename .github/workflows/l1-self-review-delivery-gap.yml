@@ -139,6 +139,7 @@ jobs:
               machine_gates: [test]
           YAML
 
+          cd "$ACLH_RUNTIME_ROOT"
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import { parse, stringify } from 'yaml';
@@ -156,6 +157,7 @@ jobs:
           };
           fs.writeFileSync(file, stringify(state));
           NODE
+          cd "$CONSUMER"
 
           node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
           node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
