@@ -1,0 +1,216 @@
+name: Real Consumer Issue Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-real-consumer:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout real consumer
+        uses: actions/checkout@v4
+        with:
+          repository: zBorwen/playwright-demo
+          ref: main
+          path: consumer
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm ci
+
+      - name: Prepare consumer dependencies
+        run: |
+          corepack enable
+          corepack prepare pnpm@10 --activate
+          cd consumer
+          pnpm install --frozen-lockfile
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+          git switch -c agent/issue-management-runtime-validation
+          git fetch origin agent/issue-management-p4-test
+
+      - name: Initialize ACLH task before applying Issue implementation
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-MANAGEMENT-P4-REAL
+        run: |
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L2 --strategy tdd
+
+          TASK_DIR="$ACLH_PROJECT_ROOT/docs/wip/$TASK_ID"
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-ISSUE-MANAGEMENT-P4-REAL
+          classification:
+            primary: feature
+            traits:
+              - behavior-change
+              - cross-module
+              - schema-change
+              - ui-interaction
+            confidence: high
+            rationale:
+              - "Adds Issue management across shared contracts, server persistence/API, and frontend UI."
+            ambiguities:
+              - "Authentication and multi-user identity are outside this validation task."
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-ISSUE-MANAGEMENT-P4-REAL
+          classification:
+            ref: classification.yaml
+          selected:
+            - change-impact-analysis
+            - regression-verification
+            - task-decomposition
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+      - name: Apply the already-validated Issue implementation as Builder work
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+        run: |
+          cd "$ACLH_PROJECT_ROOT"
+          git merge --squash origin/agent/issue-management-p4-test
+          rm -rf .agents/skills/aclh-task
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/codex-integration.ts" attach --project "$ACLH_PROJECT_ROOT"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/codex-integration.ts" status --project "$ACLH_PROJECT_ROOT" | tee /tmp/aclh-status.json
+          grep -q '"mode": "external"' /tmp/aclh-status.json
+          grep -q '"attached": true' /tmp/aclh-status.json
+          test ! -e "$ACLH_PROJECT_ROOT/.harness/scripts"
+          test ! -e "$ACLH_PROJECT_ROOT/.harness/skills"
+
+      - name: Author factual project Context and resolve Scope
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-MANAGEMENT-P4-REAL
+        run: |
+          mkdir -p "$ACLH_PROJECT_ROOT/.harness/project"
+          cat > "$ACLH_PROJECT_ROOT/.harness/project/profile.yaml" <<'YAML'
+          project:
+            name: "playwright-demo"
+            description: "Existing TypeScript monorepo with React frontend, Hono server, shared contracts, and Playwright tooling."
+            repo: "zBorwen/playwright-demo"
+            type: "fullstack"
+            maturity: "existing"
+          tech_stack:
+            language: "TypeScript"
+            framework: "React + Hono"
+            build_tool: "Vite"
+            state_management: "React state"
+            styling: "Tailwind CSS"
+            testing: "Vitest + Playwright"
+            linting: "TypeScript checks"
+            package_manager: "pnpm"
+            node_version: "22"
+          commands:
+            install: "pnpm install --frozen-lockfile"
+            dev: "pnpm dev"
+            test: "pnpm test"
+          YAML
+
+          cat > "$ACLH_PROJECT_ROOT/.harness/project/architecture.yaml" <<'YAML'
+          modules:
+            - name: SharedContracts
+              path: "packages/shared"
+              responsibility: "Cross-package TypeScript contracts and schemas."
+              depends_on: []
+            - name: Server
+              path: "packages/server"
+              responsibility: "Hono API, services, persistence, and runtime integration."
+              depends_on: [SharedContracts]
+            - name: Frontend
+              path: "packages/frontend"
+              responsibility: "React application and browser-facing Issue workspace."
+              depends_on: [SharedContracts, Server]
+            - name: Agent
+              path: "packages/agent"
+              responsibility: "Existing automation agent package outside the Issue task scope."
+              depends_on: [SharedContracts]
+          boundaries:
+            rules:
+              - "Frontend consumes server APIs rather than persistence directly."
+              - "Shared contracts must not depend on frontend or server implementations."
+            dependency_direction:
+              - "Frontend -> Server -> SharedContracts"
+          YAML
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify --json
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+
+      - name: Verify browser proof against the real consumer
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-MANAGEMENT-P4-REAL
+        run: |
+          TASK_DIR="$ACLH_PROJECT_ROOT/docs/wip/$TASK_ID"
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-ISSUE-MANAGEMENT-P4-REAL
+          assessment:
+            source: codex
+            summary: "Issue behavior has canonical test coverage and browser interaction has real Playwright coverage."
+          entries:
+            - id: behavior-regression
+              dimension: behavior-regression
+              description: "Verify Issue persistence and update regressions."
+              status: machine-covered
+              machine_gates: [test]
+            - id: browser-interaction
+              dimension: browser-interaction
+              description: "Verify the Issue browser flow, text containment, and stale selection clearing."
+              status: machine-covered
+              machine_proofs: [browser]
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/browser-verification.ts" "$TASK_ID" --run
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/browser-verification.ts" "$TASK_ID" --verify
+
+      - name: Prove current canonical Evidence is not baseline-aware
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-ISSUE-MANAGEMENT-P4-REAL
+        run: |
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate check
+
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate typecheck 2>&1 | tee /tmp/aclh-typecheck.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "Expected canonical project-wide typecheck to expose the known out-of-scope Agent baseline, but it passed."
+            exit 1
+          fi
+
+          if ! grep -q 'packages/agent' /tmp/aclh-typecheck.log; then
+            echo "Canonical typecheck failed, but not for the expected out-of-scope Agent baseline."
+            cat /tmp/aclh-typecheck.log
+            exit 1
+          fi
+
+          echo "CONFIRMED: ACLH canonical typecheck is project-wide and blocks this scoped Issue task on unrelated pre-existing packages/agent errors."
+          echo "The real consumer's scoped shared/server/frontend verification is separately green on playwright-demo Actions run #7."
