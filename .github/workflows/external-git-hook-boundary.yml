@@ -1,0 +1,161 @@
+name: External Git Hook Boundary Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-external-hook-boundary:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Create a local remote and external consumer
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-EXTERNAL-HOOK-BOUNDARY
+        run: |
+          REMOTE="$RUNNER_TEMP/aclh-hook-remote.git"
+          CONSUMER="$RUNNER_TEMP/aclh-hook-consumer"
+          rm -rf "$REMOTE" "$CONSUMER"
+          git init --bare "$REMOTE"
+          git init -b main "$CONSUMER"
+          cd "$CONSUMER"
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+          git remote add origin "$REMOTE"
+          mkdir -p src
+          echo 'export const value = 1;' > src/value.ts
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-external-hook-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          git add .
+          git commit -m "initial consumer"
+          git push -u origin main
+          git switch -c agent/external-hook-boundary
+
+          echo "REMOTE=$REMOTE" >> "$GITHUB_ENV"
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: Attach ACLH and prove it does not install a Git hook
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-EXTERNAL-HOOK-BOUNDARY
+        run: |
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/codex-integration.ts" attach --project "$CONSUMER"
+          test -f "$CONSUMER/.agents/skills/aclh-task/SKILL.md"
+          test ! -e "$CONSUMER/.harness/scripts"
+          test ! -e "$CONSUMER/.harness/skills"
+          test ! -e "$CONSUMER/.git/hooks/pre-push"
+
+          hooks_path=$(git -C "$CONSUMER" config --get core.hooksPath || true)
+          test -z "$hooks_path"
+
+          echo "CONFIRMED BOUNDARY: external attach installs the thin Codex Skill only; it does not install or configure a Git pre-push hook."
+
+      - name: Prove an incomplete active Task can push when no hook is installed
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-EXTERNAL-HOOK-BOUNDARY
+        run: |
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          # Avoid the separately confirmed host-CI branch identity bug so this test isolates hooks.
+          env -u GITHUB_HEAD_REF GITHUB_ACTIONS=false node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          echo 'export const value = 2;' > src/value.ts
+          git add src/value.ts "docs/wip/$TASK_ID"
+          git commit -m "managed: intentionally incomplete L1 task"
+
+          # No ACLH Git hook exists, so Git itself should allow the push.
+          env -u GITHUB_HEAD_REF GITHUB_ACTIONS=false git push origin HEAD:refs/heads/agent/external-hook-boundary | tee /tmp/push-without-hook.log
+          remote_sha=$(git --git-dir="$REMOTE" rev-parse refs/heads/agent/external-hook-boundary)
+          local_sha=$(git rev-parse HEAD)
+          test "$remote_sha" = "$local_sha"
+
+          echo "CONFIRMED BOUNDARY: without an explicitly installed hook, external ACLH does not make git push a governance enforcement point."
+
+      - name: Install the shipped legacy pre-push hook and prove it is not external-aware
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-EXTERNAL-HOOK-BOUNDARY
+        run: |
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+          cp "$ACLH_RUNTIME_ROOT/.harness/hooks/pre-push.sh" .git/hooks/pre-push
+          chmod +x .git/hooks/pre-push
+
+          echo 'export const value = 3;' > src/value.ts
+          git add src/value.ts
+          git commit -m "test: exercise shipped legacy pre-push hook"
+
+          before_remote=$(git --git-dir="$REMOTE" rev-parse refs/heads/agent/external-hook-boundary)
+          set +e
+          env -u GITHUB_HEAD_REF GITHUB_ACTIONS=false git push origin HEAD:refs/heads/agent/external-hook-boundary > /tmp/legacy-hook-push.log 2>&1
+          push_status=$?
+          set -e
+          after_remote=$(git --git-dir="$REMOTE" rev-parse refs/heads/agent/external-hook-boundary)
+
+          test "$push_status" -ne 0
+          test "$before_remote" = "$after_remote"
+          grep -Eq 'MODULE_NOT_FOUND|Cannot find module.*\.harness/scripts/delivery-gate' /tmp/legacy-hook-push.log
+          cat /tmp/legacy-hook-push.log
+
+          echo "CONFIRMED COMPATIBILITY GAP: the shipped pre-push hook blocks an external consumer for the wrong reason because it assumes Runtime scripts live under the consumer's .harness directory."
+
+      - name: Prove an external-aware hook wiring can reach the real Delivery Gate
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-EXTERNAL-HOOK-BOUNDARY
+        run: |
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          cat > .git/hooks/pre-push <<EOF
+          #!/usr/bin/env bash
+          export ACLH_RUNTIME_ROOT="$ACLH_RUNTIME_ROOT"
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID"
+          EOF
+          chmod +x .git/hooks/pre-push
+
+          before_remote=$(git --git-dir="$REMOTE" rev-parse refs/heads/agent/external-hook-boundary)
+          set +e
+          env -u GITHUB_HEAD_REF GITHUB_ACTIONS=false git push origin HEAD:refs/heads/agent/external-hook-boundary > /tmp/external-aware-hook.log 2>&1
+          push_status=$?
+          set -e
+          after_remote=$(git --git-dir="$REMOTE" rev-parse refs/heads/agent/external-hook-boundary)
+
+          test "$push_status" -ne 0
+          test "$before_remote" = "$after_remote"
+          grep -q 'Task identity PASS' /tmp/external-aware-hook.log
+          grep -Eq 'Classification FAIL|Skill Plan FAIL|Verification plan FAIL' /tmp/external-aware-hook.log
+          cat /tmp/external-aware-hook.log
+
+          echo "CONFIRMED: Git can enforce external ACLH when a hook is explicitly wired to runtimeRoot/projectRoot; current external attach simply does not provide that wiring."
