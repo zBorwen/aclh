@@ -3,6 +3,7 @@ import { parse as parseYaml } from 'yaml';
 import { ALL_GATES, type GateName } from './evidence-runtime.ts';
 
 export type VerificationCoverageStatus = 'machine-covered' | 'human-covered' | 'uncovered';
+export type VerificationMachineProof = 'browser';
 
 export interface VerificationGapEntry {
   id: string;
@@ -10,6 +11,7 @@ export interface VerificationGapEntry {
   description: string;
   status: VerificationCoverageStatus;
   machine_gates?: GateName[];
+  machine_proofs?: VerificationMachineProof[];
   human?: {
     source: 'human';
     checked_by: string;
@@ -21,7 +23,7 @@ export interface VerificationGapEntry {
 }
 
 export interface VerificationGapRegistry {
-  version: '1.0';
+  version: '1.0' | '1.1';
   task_id: string;
   assessment: {
     source: 'codex' | 'human';
@@ -32,10 +34,13 @@ export interface VerificationGapRegistry {
 
 const ROOT_KEYS = new Set(['version', 'task_id', 'assessment', 'entries']);
 const ASSESSMENT_KEYS = new Set(['source', 'summary']);
-const ENTRY_KEYS = new Set(['id', 'dimension', 'description', 'status', 'machine_gates', 'human', 'notes']);
+const ENTRY_KEYS_V1 = new Set(['id', 'dimension', 'description', 'status', 'machine_gates', 'human', 'notes']);
+const ENTRY_KEYS_V1_1 = new Set([...ENTRY_KEYS_V1, 'machine_proofs']);
 const HUMAN_KEYS = new Set(['source', 'checked_by', 'checked_at', 'procedure', 'result']);
 const STATUSES = new Set<VerificationCoverageStatus>(['machine-covered', 'human-covered', 'uncovered']);
 const GATE_SET = new Set<string>(ALL_GATES);
+const PROOF_ORDER: VerificationMachineProof[] = ['browser'];
+const PROOF_SET = new Set<string>(PROOF_ORDER);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -53,7 +58,8 @@ function kebab(value: unknown, label: string): string {
   if (!/^[a-z][a-z0-9-]*$/.test(result)) throw new Error(`${label} must be kebab-case`);
   return result;
 }
-function gateList(value: unknown, label: string): GateName[] {
+function gateList(value: unknown, label: string, allowMissing: boolean): GateName[] | undefined {
+  if (value === undefined && allowMissing) return undefined;
   if (!Array.isArray(value) || value.length === 0 || value.some(item => typeof item !== 'string' || !GATE_SET.has(item))) {
     throw new Error(`${label} must contain one or more canonical gates: ${ALL_GATES.join(', ')}`);
   }
@@ -63,6 +69,17 @@ function gateList(value: unknown, label: string): GateName[] {
   if (canonical.join('\0') !== result.join('\0')) throw new Error(`${label} must use canonical gate order`);
   return result;
 }
+function proofList(value: unknown, label: string): VerificationMachineProof[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length === 0 || value.some(item => typeof item !== 'string' || !PROOF_SET.has(item))) {
+    throw new Error(`${label} must contain one or more supported machine proofs: ${PROOF_ORDER.join(', ')}`);
+  }
+  const result = value as VerificationMachineProof[];
+  if (new Set(result).size !== result.length) throw new Error(`${label} must not contain duplicate proofs`);
+  const canonical = PROOF_ORDER.filter(proof => result.includes(proof));
+  if (canonical.join('\0') !== result.join('\0')) throw new Error(`${label} must use canonical proof order`);
+  return result;
+}
 function validTimestamp(value: string): boolean {
   return !Number.isNaN(Date.parse(value));
 }
@@ -70,7 +87,8 @@ function validTimestamp(value: string): boolean {
 export function validateVerificationGapRegistry(value: unknown, taskId: string): VerificationGapRegistry {
   if (!isRecord(value)) throw new Error('verification-gaps root must be an object');
   rejectUnknownKeys(value, ROOT_KEYS, 'verification-gaps root');
-  if (value.version !== '1.0') throw new Error('verification-gaps version must be "1.0"');
+  if (value.version !== '1.0' && value.version !== '1.1') throw new Error('verification-gaps version must be "1.0" or "1.1"');
+  const version = value.version as '1.0' | '1.1';
   if (value.task_id !== taskId) throw new Error(`verification-gaps task_id must match ${taskId}`);
   if (!isRecord(value.assessment)) throw new Error('verification-gaps assessment must be an object');
   rejectUnknownKeys(value.assessment, ASSESSMENT_KEYS, 'verification-gaps assessment');
@@ -82,7 +100,7 @@ export function validateVerificationGapRegistry(value: unknown, taskId: string):
 
   const entries: VerificationGapEntry[] = value.entries.map((raw, index) => {
     if (!isRecord(raw)) throw new Error(`verification-gaps entries[${index}] must be an object`);
-    rejectUnknownKeys(raw, ENTRY_KEYS, `verification-gaps entries[${index}]`);
+    rejectUnknownKeys(raw, version === '1.1' ? ENTRY_KEYS_V1_1 : ENTRY_KEYS_V1, `verification-gaps entries[${index}]`);
     const id = kebab(raw.id, `verification-gaps entries[${index}].id`);
     const dimension = kebab(raw.dimension, `verification-gaps entries[${index}].dimension`);
     const description = nonEmpty(raw.description, `verification-gaps entries[${index}].description`);
@@ -94,11 +112,21 @@ export function validateVerificationGapRegistry(value: unknown, taskId: string):
 
     if (status === 'machine-covered') {
       if (raw.human !== undefined) throw new Error(`verification-gaps ${id}: machine-covered must not declare human coverage`);
-      return { id, dimension, description, status, machine_gates: gateList(raw.machine_gates, `verification-gaps ${id}.machine_gates`), ...(notes ? { notes } : {}) };
+      const machineGates = gateList(raw.machine_gates, `verification-gaps ${id}.machine_gates`, version === '1.1');
+      const machineProofs = version === '1.1' ? proofList(raw.machine_proofs, `verification-gaps ${id}.machine_proofs`) : undefined;
+      if ((!machineGates || machineGates.length === 0) && (!machineProofs || machineProofs.length === 0)) {
+        throw new Error(`verification-gaps ${id}: machine-covered requires machine_gates and/or machine_proofs`);
+      }
+      return {
+        id, dimension, description, status,
+        ...(machineGates ? { machine_gates: machineGates } : {}),
+        ...(machineProofs ? { machine_proofs: machineProofs } : {}),
+        ...(notes ? { notes } : {}),
+      };
     }
 
     if (status === 'human-covered') {
-      if (raw.machine_gates !== undefined) throw new Error(`verification-gaps ${id}: human-covered must not declare machine_gates`);
+      if (raw.machine_gates !== undefined || raw.machine_proofs !== undefined) throw new Error(`verification-gaps ${id}: human-covered must not declare machine coverage`);
       if (!isRecord(raw.human)) throw new Error(`verification-gaps ${id}: human coverage record is required`);
       rejectUnknownKeys(raw.human, HUMAN_KEYS, `verification-gaps ${id}.human`);
       if (raw.human.source !== 'human') throw new Error(`verification-gaps ${id}: human.source must be human`);
@@ -117,7 +145,7 @@ export function validateVerificationGapRegistry(value: unknown, taskId: string):
       };
     }
 
-    if (raw.machine_gates !== undefined || raw.human !== undefined) {
+    if (raw.machine_gates !== undefined || raw.machine_proofs !== undefined || raw.human !== undefined) {
       throw new Error(`verification-gaps ${id}: uncovered must not claim machine or human coverage`);
     }
     if (!notes) throw new Error(`verification-gaps ${id}: uncovered requires notes describing the gap`);
@@ -128,7 +156,7 @@ export function validateVerificationGapRegistry(value: unknown, taskId: string):
   if (duplicateIds.length > 0) throw new Error(`verification-gaps contains duplicate id(s): ${[...new Set(duplicateIds)].join(', ')}`);
 
   return {
-    version: '1.0',
+    version,
     task_id: taskId,
     assessment: { source: value.assessment.source, summary },
     entries,
