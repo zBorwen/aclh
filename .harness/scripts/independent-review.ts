@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
 interface ReviewRecord {
   version?: unknown;
@@ -18,8 +18,8 @@ interface ReviewRecord {
   notes?: unknown;
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
+const roots = resolveRuntimeRoots(import.meta.url);
+const ROOT = roots.projectRoot;
 const taskId = process.argv[2];
 const mode = process.argv[3];
 
@@ -32,11 +32,11 @@ if (mode !== '--prepare' && mode !== '--verify') {
   process.exit(1);
 }
 
-const taskDir = path.join(ROOT, 'docs/wip', taskId);
+const taskDir = path.join(roots.projectWipDir, taskId);
 const reviewPath = path.join(taskDir, 'independent-review.json');
 const packetPath = path.join(taskDir, 'review-packet.md');
 const evidencePath = path.join(taskDir, 'evidence.json');
-const governancePath = path.join(ROOT, '.harness/governance.yaml');
+const governancePath = path.join(roots.runtimeHarnessDir, 'governance.yaml');
 
 function git(args: string[]): string { return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim(); }
 function repositorySnapshot(): { commit_sha: string; worktree_sha256: string } {
