@@ -111,6 +111,10 @@ test('external L2 consumer passes the complete P3 delivery chain without embedde
     };
     fs.writeFileSync(statePath, stringifyYaml(state));
 
+    const scope = run(projectRoot, 'context-scope.ts', [taskId, '--generate']);
+    assert.equal(scope.status, 0, scope.stderr || scope.stdout);
+    assert.equal(run(projectRoot, 'context-scope.ts', [taskId, '--verify']).status, 0);
+
     const context = run(projectRoot, 'context-select.ts', [taskId, '--generate']);
     assert.equal(context.status, 0, context.stderr || context.stdout);
     const contextVerify = run(projectRoot, 'context-select.ts', [taskId, '--verify']);
