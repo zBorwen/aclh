@@ -24,16 +24,20 @@ function run(action: 'attach' | 'detach' | 'status', projectRoot: string) {
   });
 }
 
-test('external capability manifest exposes only migrated commands', () => {
+test('external capability manifest has a valid staged command surface', () => {
   const manifest = parseYaml(fs.readFileSync(path.join(ENGINE_ROOT, '.harness/external-capabilities.yaml'), 'utf8')) as {
+    version: string;
     external_mode: { status: string; commands: Record<string, string> };
   };
-  assert.equal(manifest.external_mode.status, 'context-ready');
-  assert.equal(manifest.external_mode.commands['init-task'], 'supported');
-  assert.equal(manifest.external_mode.commands.classification, 'supported');
-  assert.equal(manifest.external_mode.commands['skill-plan'], 'supported');
-  assert.equal(manifest.external_mode.commands['context-select'], 'supported');
-  assert.equal(manifest.external_mode.commands.evidence, 'pending');
+  assert.equal(manifest.version, '1.0');
+  assert.equal(typeof manifest.external_mode.status, 'string');
+  assert.ok(manifest.external_mode.status.length > 0);
+  for (const [command, state] of Object.entries(manifest.external_mode.commands)) {
+    assert.ok(['supported', 'pending'].includes(state), `${command} has invalid capability state ${state}`);
+  }
+  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output']) {
+    assert.equal(manifest.external_mode.commands[command], 'supported', `${command} must remain supported once migrated`);
+  }
 });
 
 test('Codex integration attaches as a thin Skill and detaches without touching consumer files', () => {

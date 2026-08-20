@@ -1,13 +1,14 @@
 version: "1.0"
 external_mode:
-  status: context-ready
+  status: verification-ready
   commands:
     init-task: supported
     classification: supported
     skill-plan: supported
     context-select: supported
-    verification-plan: pending
-    skill-output: pending
+    task-identity: supported
+    verification-plan: supported
+    skill-output: supported
     evidence: pending
     skill-evidence: pending
     self-review: pending
