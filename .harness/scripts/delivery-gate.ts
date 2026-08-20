@@ -68,6 +68,7 @@ if (hasSkillPlan) {
   if (resync?.requirements.skill_plan_review === true) {
     run('skill-replan.ts', [taskId, '--verify']);
   }
+  if (EXTERNAL_MODE) run('context-readiness.ts', [taskId, '--verify']);
   verifyContextBoundary();
   run('verification-plan.ts', [taskId]);
   run('skill-output.ts', [taskId, '--verify']);
