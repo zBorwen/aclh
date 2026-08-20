@@ -1,6 +1,6 @@
 version: "1.0"
 external_mode:
-  status: verification-ready
+  status: evidence-ready
   commands:
     init-task: supported
     classification: supported
@@ -9,7 +9,7 @@ external_mode:
     task-identity: supported
     verification-plan: supported
     skill-output: supported
-    evidence: pending
+    evidence: supported
     skill-evidence: pending
     self-review: pending
     independent-review: pending
