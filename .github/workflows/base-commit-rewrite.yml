@@ -1,0 +1,328 @@
+name: Base Commit Rewrite Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-base-rewrite:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Create external Task and preserve the true initialization base
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-BASE-COMMIT-REWRITE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+
+          CONSUMER="$RUNNER_TEMP/aclh-base-rewrite-consumer"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src"
+          cd "$CONSUMER"
+          git init -b agent/base-commit-rewrite
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-base-rewrite-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          echo 'export const value = 1;' > src/value.ts
+          git add .
+          git commit -m "initial consumer"
+          TRUE_BASE=$(git rev-parse HEAD)
+
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse } from 'yaml';
+          const state = parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`, 'utf8'));
+          if (state.identity.base_commit !== process.env.TRUE_BASE) throw new Error('Task did not bind the true initialization base');
+          NODE
+
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+          echo "TRUE_BASE=$TRUE_BASE" >> "$GITHUB_ENV"
+
+      - name: Commit real Task code after the true base
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-BASE-COMMIT-REWRITE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+          cd "$CONSUMER"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-BASE-COMMIT-REWRITE
+          classification:
+            primary: feature
+            traits: [behavior-change]
+            confidence: high
+            rationale:
+              - "Exercise whether mutable identity.base_commit can hide committed Task changes from Scope."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-BASE-COMMIT-REWRITE
+          classification:
+            ref: classification.yaml
+          selected:
+            - regression-verification
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          echo 'export const value = 2;' > src/value.ts
+          git add src/value.ts
+          git commit -m "task: change governed value"
+          TASK_HEAD=$(git rev-parse HEAD)
+          test "$TASK_HEAD" != "$TRUE_BASE"
+          git diff --name-only "$TRUE_BASE" "$TASK_HEAD" | tee /tmp/true-base-diff.log
+          grep -q '^src/value.ts$' /tmp/true-base-diff.log
+
+          echo "TASK_HEAD=$TASK_HEAD" >> "$GITHUB_ENV"
+
+      - name: Prove original identity scopes the committed code change
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-BASE-COMMIT-REWRITE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/task-identity.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const scope = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/context-scope.json`, 'utf8'));
+          if (!scope.basis.changed_files.includes('src/value.ts')) throw new Error('true base failed to include committed Task change');
+          if (!scope.scope.files.includes('src/value.ts')) throw new Error('true base Scope failed to include committed Task file');
+          NODE
+
+          echo "CONFIRMED CONTROL: original initialization base correctly scopes src/value.ts."
+
+      - name: Rewrite identity.base_commit to the current Task HEAD
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ env.CONSUMER }}
+          TASK_ID: TASK-BASE-COMMIT-REWRITE
+        run: |
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          if (state.identity.base_commit !== process.env.TRUE_BASE) throw new Error('expected true base before rewrite');
+          state.identity.base_commit = process.env.TASK_HEAD;
+          fs.writeFileSync(file, stringify(state));
+          NODE
+
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/task-identity.ts" "$TASK_ID" --verify | tee /tmp/rewrite-identity.log
+          grep -q "base ${TASK_HEAD:0:12}" /tmp/rewrite-identity.log
+
+          echo "CONFIRMED PROBE: task-identity accepts the current Task HEAD as a rewritten base because HEAD is an ancestor of itself."
+
+      - name: Regenerate Scope and prove committed Task changes disappear
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-BASE-COMMIT-REWRITE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify > /tmp/old-scope-after-rewrite.log 2>&1
+          old_scope_status=$?
+          set -e
+          test "$old_scope_status" -ne 0
+          grep -q 'stale' /tmp/old-scope-after-rewrite.log
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const root = process.env.ACLH_PROJECT_ROOT;
+          const task = process.env.TASK_ID;
+          const scope = JSON.parse(fs.readFileSync(`${root}/docs/wip/${task}/context-scope.json`, 'utf8'));
+          if (scope.basis.base_commit !== process.env.TASK_HEAD) throw new Error('Scope did not adopt rewritten base');
+          if (scope.basis.changed_files.length !== 0) throw new Error(`expected zero changed files, got ${scope.basis.changed_files.join(',')}`);
+          if (scope.scope.files.length !== 0) throw new Error(`expected zero scoped files, got ${scope.scope.files.join(',')}`);
+          NODE
+
+          git -C "$CONSUMER" diff --name-only "$TRUE_BASE" "$TASK_HEAD" | grep -q '^src/value.ts$'
+          echo "CONFIRMED IDENTITY GAP: true Git history still contains src/value.ts after the original base, but rewritten Task identity makes deterministic Scope report zero changed files."
+
+      - name: Build fresh Context and trust artifacts from the rewritten empty Scope
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-BASE-COMMIT-REWRITE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] Change the governed value.
+          - [x] Characterize mutable base-commit trust semantics.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Commit a real code change after the initialization base.
+          - [x] Rewrite base_commit to hide it from Scope.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Canonical check/typecheck/test gates.
+
+          ## Verification Strategy
+
+          strategy: tdd
+
+          - [x] RED: original Scope contains src/value.ts
+          - [x] GREEN: rewritten base produces empty Scope
+          - [x] REFACTOR: isolate identity behavior
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Governed code changed after the real initialization base.
+          MD
+          cat > "$TASK_DIR/regression-verification.md" <<'MD'
+          # Regression Scenarios
+          - Canonical consumer test remains green.
+
+          # Observable Behavior
+          - The value changed from 1 to 2 in Git history.
+
+          # Test Coverage
+          - Canonical test is the machine regression gate.
+
+          # Evidence
+          - Fresh test Evidence is required.
+          MD
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-BASE-COMMIT-REWRITE
+          assessment:
+            source: codex
+            summary: "The machine-verifiable regression is covered by canonical test Evidence."
+          entries:
+            - id: behavior-regression
+              dimension: behavior-regression
+              description: "Verify the isolated consumer remains green."
+              status: machine-covered
+              machine_gates: [test]
+          YAML
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify --json | tee /tmp/base-rewrite-readiness.json
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const context = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/context.json`, 'utf8'));
+          if (context.requirements['changed-files']?.level !== 'required') throw new Error('regression-verification should require changed-files');
+          if (context.selected['changed-files']?.files?.length !== 0) throw new Error('expected required changed-files Context to be empty after base rewrite');
+          NODE
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Base commit rewrite validation',
+            notes: 'Fresh Builder self-review after the rewritten identity/Scope state.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `base-rewrite answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+
+      - name: Prove Delivery trusts the rewritten base and empty required changed-files Context
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-BASE-COMMIT-REWRITE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/base-rewrite-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/base-rewrite-delivery.log
+
+          git diff --name-only "$TRUE_BASE" "$TASK_HEAD" | grep -q '^src/value.ts$'
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const scope = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/context-scope.json`, 'utf8'));
+          const context = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/context.json`, 'utf8'));
+          if (scope.scope.files.length !== 0) throw new Error('Delivery Scope unexpectedly regained the hidden code file');
+          if (context.selected['changed-files'].files.length !== 0) throw new Error('Delivery Context unexpectedly regained the hidden code file');
+          NODE
+
+          echo "CONFIRMED GOVERNANCE GAP: mutable identity.base_commit can be rewritten to current HEAD, causing a real committed Task change after the original base to disappear from required changed-files Scope/Context while Task Identity and Delivery still PASS."
