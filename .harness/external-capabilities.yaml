@@ -1,6 +1,6 @@
 version: "1.0"
 external_mode:
-  status: bootstrap-ready
+  status: retrieval-ready
   commands:
     init-task: supported
     classification: supported
