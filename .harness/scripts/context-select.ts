@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { loadClassification } from './lib/classification-runtime.ts';
+import { assessContextSource } from './lib/context-readiness-runtime.ts';
 import {
   contextScopePath,
   contextScopeSemanticHash,
@@ -330,9 +331,10 @@ for (const id of [...requirements.keys()].sort()) {
   }
 
   const sourcePath = path.join(PROJECT_DIR,capability.source!);
-  if (!fs.existsSync(sourcePath)) {
-    if (requiredBy.length>0) fail(`required Context capability ${id} source missing: ${capability.source}`);
-    selectedOutput[id]={available:false,source:sourceDisplay(sourcePath)};
+  const readiness = assessContextSource(id, capability, sourcePath);
+  if (readiness.status !== 'ready') {
+    if (requiredBy.length>0) fail(`required Context capability ${id} source ${readiness.status}: ${readiness.reason}`);
+    selectedOutput[id]={available:false,source:sourceDisplay(sourcePath),readiness:readiness.status,reason:readiness.reason};
     continue;
   }
 
