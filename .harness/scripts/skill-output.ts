@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadClassification } from './lib/classification-runtime.ts';
 import { loadSkillPlan } from './lib/skill-plan-runtime.ts';
+import { resolveRuntimeRelative, resolveRuntimeRoots } from './lib/runtime-roots.ts';
 import {
   loadSkillOutputRegistry,
   validateSkillOutputCoverage,
@@ -16,17 +16,10 @@ import {
   validateSkillContextCapabilities,
 } from './lib/skill-runtime.ts';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
-const SKILLS_DIR = process.env.ACLH_SKILLS_DIR
-  ? path.resolve(ROOT, process.env.ACLH_SKILLS_DIR)
-  : path.join(ROOT, '.harness/skills');
-const CAPABILITY_REGISTRY = process.env.ACLH_CONTEXT_CAPABILITIES
-  ? path.resolve(ROOT, process.env.ACLH_CONTEXT_CAPABILITIES)
-  : path.join(ROOT, '.harness/context/capabilities.yaml');
-const OUTPUT_REGISTRY = process.env.ACLH_SKILL_OUTPUTS
-  ? path.resolve(ROOT, process.env.ACLH_SKILL_OUTPUTS)
-  : path.join(ROOT, '.harness/artifacts/skill-outputs.yaml');
+const roots = resolveRuntimeRoots(import.meta.url);
+const SKILLS_DIR = resolveRuntimeRelative(roots.runtimeRoot, process.env.ACLH_SKILLS_DIR, '.harness/skills');
+const CAPABILITY_REGISTRY = resolveRuntimeRelative(roots.runtimeRoot, process.env.ACLH_CONTEXT_CAPABILITIES, '.harness/context/capabilities.yaml');
+const OUTPUT_REGISTRY = resolveRuntimeRelative(roots.runtimeRoot, process.env.ACLH_SKILL_OUTPUTS, '.harness/artifacts/skill-outputs.yaml');
 
 function fail(message: string): never {
   console.error(`Skill Output FAIL: ${message}`);
@@ -56,7 +49,7 @@ try {
     process.exit(1);
   }
 
-  const taskDir = path.join(ROOT,'docs/wip',taskId);
+  const taskDir = path.join(roots.projectWipDir,taskId);
   if (!fs.existsSync(taskDir)) fail(`task not found: ${taskId}`);
   loadClassification(path.join(taskDir,'classification.yaml'),taskId);
   const plan = loadSkillPlan(path.join(taskDir,'skill-plan.yaml'),taskId,true);

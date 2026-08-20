@@ -1,22 +1,8 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
-
-// ============================================================================
-// ACLH Adversarial Self-Review (TypeScript, runs natively on Node >= 22)
-//
-// Task-completion hook: verifies task artifacts and forces a hostile review
-// of the finished work before it is submitted for human review.
-//
-// Usage:
-//   node .harness/scripts/self-review.ts                # review all active tasks
-//   node .harness/scripts/self-review.ts <TASK_ID>      # review one task
-//   node .harness/scripts/self-review.ts <TASK_ID> --json
-//
-// Exit codes: 0 = pass (no MISS), 1 = at least one MISS (artifact/state broken)
-// ============================================================================
+import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
 interface TaskState {
   task_id?: unknown;
@@ -54,18 +40,15 @@ interface ReviewReport {
   result: 'PASS' | 'WARNINGS' | 'FAIL';
 }
 
-const __filename: string = fileURLToPath(import.meta.url);
-const __dirname: string = path.dirname(__filename);
-const ROOT: string = path.resolve(__dirname, '../../');
-const WIP: string = path.join(ROOT, 'docs/wip');
-
-const README_LINK = path.join(ROOT, 'AGENTS.md');
+const roots = resolveRuntimeRoots(import.meta.url);
+const ROOT = roots.projectRoot;
+const WIP = roots.projectWipDir;
+const README_LINK = path.join(roots.runtimeRoot, 'AGENTS.md');
 const REQUIRED_FILES: string[] = ['spec.md', 'tasks.md', 'test-plan.md', 'changelog.md', '.state.yaml'];
 const VALID_PHASES: string[] = ['requirements', 'design', 'task', 'implement', 'testing', 'delivery'];
 const VALID_STATUSES: string[] = ['active', 'paused', 'blocked'];
 const COMPLETION_PHASES: string[] = ['testing', 'delivery'];
 
-// Hostile questions: answer each deliberately before declaring the task done.
 const HOSTILE_QUESTIONS: string[] = [
   'Q1  What did I miss? What did I overlook? (boundary cases, error paths, empty/null inputs, state transitions, concurrency)',
   'Q2  Which of my assumptions could be wrong? Would a stricter reviewer reject them first?',
@@ -131,13 +114,11 @@ function reviewTask(taskId: string): ReviewReport {
     checks.push({ level, label, detail });
   };
 
-  // 1. Artifact presence
   for (const file of REQUIRED_FILES) {
     const ok = fs.existsSync(path.join(taskDir, file));
     push(ok ? 'OK' : 'MISS', `artifact:${file}`, ok ? 'present' : 'missing');
   }
 
-  // 2. State machine validity
   const state = loadState(taskId);
   if (!state) {
     push('MISS', 'state:.state.yaml', 'unreadable or missing');
@@ -198,7 +179,6 @@ function reviewTask(taskId: string): ReviewReport {
     }
   }
 
-  // 3. Spec acceptance criteria present
   const specPath = path.join(taskDir, 'spec.md');
   if (fs.existsSync(specPath)) {
     const spec = fs.readFileSync(specPath, 'utf8');
@@ -206,7 +186,6 @@ function reviewTask(taskId: string): ReviewReport {
     push(hasAC ? 'OK' : 'WARN', 'spec:acceptance_criteria', hasAC ? 'checklist found' : 'no "[ ]" acceptance-criteria checklist');
   }
 
-  // 4. Test plan / tasks coverage hints
   const tasksPath = path.join(taskDir, 'tasks.md');
   if (fs.existsSync(tasksPath)) {
     const tasks = fs.readFileSync(tasksPath, 'utf8');
@@ -214,7 +193,6 @@ function reviewTask(taskId: string): ReviewReport {
     push(hasTestItems ? 'OK' : 'WARN', 'tasks:test_items', hasTestItems ? 'checklist found' : 'no "[ ]" task/test items');
   }
 
-  // 5. Changelog activity
   const changelogPath = path.join(taskDir, 'changelog.md');
   if (fs.existsSync(changelogPath)) {
     const changelog = fs.readFileSync(changelogPath, 'utf8');
@@ -222,14 +200,10 @@ function reviewTask(taskId: string): ReviewReport {
     push(lineCount > 0 ? 'OK' : 'WARN', 'changelog:entries', lineCount > 0 ? `${lineCount} entry/entries` : 'no "- " entries');
   }
 
-  // 6. AGENTS.md constraint doc reachable (sanity for the operating contract)
   const agentsOk = fs.existsSync(README_LINK);
-  push(agentsOk ? 'OK' : 'MISS', 'contract:agents.md', agentsOk ? 'present' : 'AGENTS.md missing (this self-review is defined by it)');
+  push(agentsOk ? 'OK' : 'MISS', 'contract:agents.md', agentsOk ? 'present in ACLH Engine' : 'AGENTS.md missing from ACLH Engine');
 
-  // Questions are always emitted; answering them is the point of the hook.
-  for (const q of HOSTILE_QUESTIONS) {
-    questions.push(q);
-  }
+  for (const q of HOSTILE_QUESTIONS) questions.push(q);
 
   const phase = state ? String(state.phase ?? 'unknown') : 'unknown';
   const status = state ? String(state.status ?? 'unknown') : 'unknown';
@@ -263,9 +237,7 @@ if (jsonOut) {
       console.log(`      ${mark} [${c.label}] ${c.detail}`);
     }
     console.log('    Hostile questions (answer each before submitting):');
-    for (const q of r.questions) {
-      console.log(`      ${q}`);
-    }
+    for (const q of r.questions) console.log(`      ${q}`);
     overallMisses += r.misses;
     overallWarnings += r.warnings;
     if (r.result === 'FAIL' || r.result === 'WARNINGS') {

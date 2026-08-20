@@ -1,0 +1,24 @@
+version: "1.0"
+external_mode:
+  status: browser-verification-ready
+  commands:
+    init-task: supported
+    classification: supported
+    skill-plan: supported
+    context-readiness: supported
+    context-bootstrap: supported
+    context-scope: supported
+    context-select: supported
+    task-identity: supported
+    verification-plan: supported
+    skill-output: supported
+    verification-gaps: supported
+    browser-verification: supported
+    evidence: supported
+    skill-evidence: supported
+    self-review: supported
+    independent-review: supported
+    delivery-gate: supported
+    managed-snapshot: supported
+    resync: supported
+    skill-replan: supported

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 
@@ -64,4 +65,14 @@ export function loadSkillPlan(planPath: string, taskId: string, requireResolved:
   try { parsed = parseYaml(fs.readFileSync(planPath, 'utf8')); }
   catch (error) { throw new Error(`skill-plan.yaml is invalid YAML: ${(error as Error).message}`); }
   return validateSkillPlanDocument(parsed, taskId, requireResolved);
+}
+
+export function semanticSkillPlanHash(plan: SkillPlanArtifact): string {
+  return createHash('sha256').update(JSON.stringify({
+    version: plan.version,
+    task_id: plan.task_id,
+    classification: plan.classification,
+    selected: plan.selected,
+    resolved: plan.resolved ?? [],
+  })).digest('hex');
 }

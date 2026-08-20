@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { stringify as stringifyYaml } from 'yaml';
 import { loadClassification } from './lib/classification-runtime.ts';
 import { loadSkillPlan } from './lib/skill-plan-runtime.ts';
+import { resolveRuntimeRoots, resolveRuntimeRelative } from './lib/runtime-roots.ts';
 import {
   loadContextCapabilities,
   loadSkillCatalog,
@@ -12,8 +12,7 @@ import {
   validateSkillContextCapabilities,
 } from './lib/skill-runtime.ts';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
+const roots = resolveRuntimeRoots(import.meta.url);
 const taskId = process.argv[2];
 const mode = process.argv[3];
 if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId) || !['--resolve', '--verify'].includes(mode) || process.argv.length !== 4) {
@@ -21,15 +20,11 @@ if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId) || !['--resolve', '-
   process.exit(1);
 }
 
-const taskDir = path.join(ROOT, 'docs/wip', taskId);
+const taskDir = path.join(roots.projectWipDir, taskId);
 const planPath = path.join(taskDir, 'skill-plan.yaml');
 const classificationPath = path.join(taskDir, 'classification.yaml');
-const skillsDir = process.env.ACLH_SKILLS_DIR
-  ? path.resolve(ROOT, process.env.ACLH_SKILLS_DIR)
-  : path.join(ROOT, '.harness/skills');
-const capabilityRegistry = process.env.ACLH_CONTEXT_CAPABILITIES
-  ? path.resolve(ROOT, process.env.ACLH_CONTEXT_CAPABILITIES)
-  : path.join(ROOT, '.harness/context/capabilities.yaml');
+const skillsDir = resolveRuntimeRelative(roots.runtimeRoot, process.env.ACLH_SKILLS_DIR, '.harness/skills');
+const capabilityRegistry = resolveRuntimeRelative(roots.runtimeRoot, process.env.ACLH_CONTEXT_CAPABILITIES, '.harness/context/capabilities.yaml');
 
 function fail(message: string): never {
   console.error(`Skill Plan FAIL: ${message}`);

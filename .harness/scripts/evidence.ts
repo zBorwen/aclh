@@ -2,27 +2,29 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import {
   ALL_GATES,
-  GATES,
   evidenceExclusions,
   loadEvidenceFile,
   normalizeRepoPath,
   repositorySnapshot,
+  resolveGateCommandSpecs,
   sameSnapshot,
   verifyEvidenceGates,
   type GateName,
 } from './lib/evidence-runtime.ts';
+import { resolveRuntimeRoots } from './lib/runtime-roots.ts';
 
 type RiskLevel = 'L0' | 'L1' | 'L2' | 'L3';
 interface GovernanceConfig { default_risk_level?: unknown; risk_levels?: Record<string,{ required_gates?: unknown }>; }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname,'../..');
-const WIP = path.join(ROOT,'docs/wip');
-const GOVERNANCE = path.join(ROOT,'.harness/governance.yaml');
+const roots = resolveRuntimeRoots(import.meta.url);
+const ROOT = roots.projectRoot;
+const WIP = roots.projectWipDir;
+const GOVERNANCE = path.join(roots.runtimeHarnessDir,'governance.yaml');
+const gateSpecs = resolveGateCommandSpecs(roots.runtimeRoot, roots.projectRoot);
+const expectedCommands = Object.fromEntries(ALL_GATES.map(gate=>[gate,gateSpecs[gate].command])) as Record<GateName,string>;
 
 function usage(): never {
   console.error('Usage: node .harness/scripts/evidence.ts <TASK_ID> --gate <check|typecheck|test>');
@@ -67,7 +69,7 @@ if(args.includes('--verify')){
   let current;
   try{current=repositorySnapshot(ROOT,excludedRelativePaths);}catch(error){console.error(`[Evidence] Cannot fingerprint repository: ${(error as Error).message}`);process.exit(1);}
   console.log(`[Evidence] ${taskId}: risk ${policy.risk}, required gates = ${policy.gates.join(', ')}`);
-  const statuses=verifyEvidenceGates(evidence,current,policy.gates);
+  const statuses=verifyEvidenceGates(evidence,current,policy.gates,expectedCommands);
   let failed=false;
   for(const gate of policy.gates){
     const status=statuses.get(gate);
@@ -85,16 +87,15 @@ if(!ALL_GATES.includes(gate)) usage();
 let before;
 try{before=repositorySnapshot(ROOT,excludedRelativePaths);}catch(error){console.error(`[Evidence] Cannot fingerprint repository: ${(error as Error).message}`);process.exit(1);}
 const startedAt=new Date().toISOString();
-const command=GATES[gate];
-const [program,...commandArgs]=command.split(' ');
-const result=spawnSync(program,commandArgs,{cwd:ROOT,stdio:'inherit',shell:process.platform==='win32'});
+const spec=gateSpecs[gate];
+const result=spawnSync(spec.program,spec.args,{cwd:ROOT,stdio:'inherit',shell:process.platform==='win32'});
 const exitCode=result.status??1;
 const finishedAt=new Date().toISOString();
 let after;
 try{after=repositorySnapshot(ROOT,excludedRelativePaths);}catch(error){console.error(`[Evidence] Cannot fingerprint repository after gate: ${(error as Error).message}`);process.exit(1);}
 const unchanged=sameSnapshot(before,after);
 const passed=exitCode===0&&unchanged;
-evidence.gates[gate]={gate,command,started_at:startedAt,finished_at:finishedAt,exit_code:exitCode,result:passed?'PASS':'FAIL',repository:before,repository_unchanged:unchanged};
+evidence.gates[gate]={gate,command:spec.command,started_at:startedAt,finished_at:finishedAt,exit_code:exitCode,result:passed?'PASS':'FAIL',repository:before,repository_unchanged:unchanged};
 evidence.updated_at=finishedAt;
 fs.writeFileSync(evidencePath,`${JSON.stringify(evidence,null,2)}\n`);
 if(!unchanged) console.error(`[Evidence] ${taskId} ${gate}: repository changed while gate was running; evidence marked FAIL`);
