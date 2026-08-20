@@ -169,7 +169,7 @@ jobs:
           node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
 
           cd "$ACLH_PROJECT_ROOT"
-          git add -- .agents .github package.json packages playwright.config.ts tests .harness/project "docs/wip/$TASK_ID"
+          git add -- .github package.json packages playwright.config.ts tests .harness/project "docs/wip/$TASK_ID"
           git commit -m "managed: establish issue task baseline"
 
           node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate check
