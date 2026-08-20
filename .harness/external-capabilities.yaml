@@ -1,10 +1,12 @@
 version: "1.0"
 external_mode:
-  status: replan-ready
+  status: readiness-ready
   commands:
     init-task: supported
     classification: supported
     skill-plan: supported
+    context-readiness: supported
+    context-scope: supported
     context-select: supported
     task-identity: supported
     verification-plan: supported
