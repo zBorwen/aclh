@@ -10,15 +10,15 @@ export interface ManagedSnapshotFile {
   recorded_at: string;
 }
 
-export function gitLocalAclhPath(root: string, relative: string): string {
-  const result = spawnSync('git', ['rev-parse', '--git-path', `aclh/${relative}`], { cwd: root, encoding: 'utf8' });
+function gitPath(root: string, relative: string): string {
+  const result = spawnSync('git', ['rev-parse', '--git-path', relative], { cwd: root, encoding: 'utf8' });
   if (result.status !== 0) throw new Error(result.stderr.trim() || 'cannot resolve Git-local ACLH state path');
   const resolved = result.stdout.trim();
   return path.isAbsolute(resolved) ? resolved : path.resolve(root, resolved);
 }
 
 export function managedSnapshotPath(root: string, taskId: string): string {
-  return gitLocalAclhPath(root, `managed/${taskId}.json`);
+  return gitPath(root, `aclh/managed/${taskId}.json`);
 }
 
 export function managedSnapshotExclusions(root: string, taskDir: string): string[] {
