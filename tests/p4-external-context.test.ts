@@ -82,17 +82,22 @@ test('Skill-aware Context reads project state from consumer and contracts from e
     bootstrap(projectRoot, taskId);
     writeProjectContext(projectRoot);
 
+    const scopeGenerate = runRuntime(projectRoot, 'context-scope.ts', [taskId, '--generate']);
+    assert.equal(scopeGenerate.status, 0, scopeGenerate.stderr || scopeGenerate.stdout);
+    assert.equal(runRuntime(projectRoot, 'context-scope.ts', [taskId, '--verify']).status, 0);
+
     const generate = runRuntime(projectRoot, 'context-select.ts', [taskId, '--generate']);
     assert.equal(generate.status, 0, generate.stderr || generate.stdout);
     const contextPath = path.join(projectRoot, 'docs/wip', taskId, 'context.json');
     const context = JSON.parse(fs.readFileSync(contextPath, 'utf8')) as {
       version: string;
       selected: Record<string, { source?: string }>;
-      basis: { changed_files: string[] };
+      basis: { changed_files: string[]; resolved_scope?: { modules?: string[] } };
     };
     assert.equal(context.version, '2.0');
     assert.equal(context.selected['project-profile']?.source, '.harness/project/profile.yaml');
     assert.equal(context.selected.architecture?.source, '.harness/project/architecture.yaml');
+    assert.deepEqual(context.basis.resolved_scope?.modules, []);
     assert.equal(fs.existsSync(path.join(projectRoot, '.harness/scripts')), false);
     assert.equal(fs.existsSync(path.join(projectRoot, '.harness/skills')), false);
 
@@ -100,10 +105,14 @@ test('Skill-aware Context reads project state from consumer and contracts from e
     assert.equal(verify.status, 0, verify.stderr || verify.stdout);
 
     fs.writeFileSync(path.join(projectRoot, 'src/index.ts'), 'export const answer = 43;\n');
+    const staleScope = runRuntime(projectRoot, 'context-scope.ts', [taskId, '--verify']);
+    assert.notEqual(staleScope.status, 0);
     const stale = runRuntime(projectRoot, 'context-select.ts', [taskId, '--verify']);
     assert.notEqual(stale.status, 0);
-    assert.match(stale.stderr, /context\.json is stale/);
+    assert.match(stale.stderr, /Context Scope invalid or stale/);
 
+    const scopeRefresh = runRuntime(projectRoot, 'context-scope.ts', [taskId, '--generate']);
+    assert.equal(scopeRefresh.status, 0, scopeRefresh.stderr || scopeRefresh.stdout);
     const refresh = runRuntime(projectRoot, 'context-select.ts', [taskId, '--generate']);
     assert.equal(refresh.status, 0, refresh.stderr || refresh.stdout);
     assert.equal(runRuntime(projectRoot, 'context-select.ts', [taskId, '--verify']).status, 0);
