@@ -1,0 +1,109 @@
+name: External Task Identity Trust Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-external-identity:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout real consumer
+        uses: actions/checkout@v4
+        with:
+          repository: zBorwen/playwright-demo
+          ref: main
+          path: consumer
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Initialize an external Task on a distinct consumer branch
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-EXTERNAL-IDENTITY-TRUST
+        run: |
+          cd "$ACLH_PROJECT_ROOT"
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+          git switch -c agent/external-task-identity-validation
+
+          actual_branch=$(git branch --show-current)
+          test "$actual_branch" = "agent/external-task-identity-validation"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L0 --strategy docs
+
+          recorded_branch=$(cd "$ACLH_RUNTIME_ROOT" && node --input-type=module -e "import fs from 'node:fs'; import { parse } from 'yaml'; const s=parse(fs.readFileSync(process.env.ACLH_PROJECT_ROOT + '/docs/wip/' + process.env.TASK_ID + '/.state.yaml','utf8')); console.log(s.identity.branch)")
+
+          echo "host GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "consumer git branch: $actual_branch"
+          echo "recorded Task branch: $recorded_branch"
+
+          test "$GITHUB_HEAD_REF" = "validation/external-task-identity-trust"
+          test "$recorded_branch" = "$GITHUB_HEAD_REF"
+          test "$recorded_branch" != "$actual_branch"
+
+      - name: Prove the normal identity verifier accepts the wrong host branch
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-EXTERNAL-IDENTITY-TRUST
+        run: |
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/task-identity.ts" "$TASK_ID" --verify | tee /tmp/identity-host-env.log
+          grep -q 'Task identity PASS' /tmp/identity-host-env.log
+          grep -q 'branch validation/external-task-identity-trust' /tmp/identity-host-env.log
+
+          echo "CONFIRMED: init-task and task-identity agree on the ACLH host PR branch even though the consumer is on a different Git branch."
+
+      - name: Force consumer Git identity and prove the same record becomes invalid
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-EXTERNAL-IDENTITY-TRUST
+        run: |
+          set +e
+          env -u GITHUB_HEAD_REF node "$ACLH_RUNTIME_ROOT/.harness/scripts/task-identity.ts" "$TASK_ID" --verify > /tmp/identity-consumer-git.log 2>&1
+          status=$?
+          set -e
+
+          test "$status" -ne 0
+          grep -q 'task belongs to branch validation/external-task-identity-trust, current branch is agent/external-task-identity-validation' /tmp/identity-consumer-git.log
+          cat /tmp/identity-consumer-git.log
+
+          echo "CONFIRMED: when identity is resolved from the governed consumer repository, the recorded external Task identity is correctly recognized as wrong."
+
+      - name: Prove Delivery's first trust gate also accepts the wrong identity
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ github.workspace }}/consumer
+          TASK_ID: TASK-EXTERNAL-IDENTITY-TRUST
+        run: |
+          # The task is intentionally incomplete. Delivery must fail later, but its identity gate
+          # should currently PASS because it delegates to the same host-environment-aware verifier.
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" > /tmp/delivery-identity.log 2>&1
+          status=$?
+          set -e
+
+          test "$status" -ne 0
+          grep -q 'Task identity PASS' /tmp/delivery-identity.log
+          grep -q 'branch validation/external-task-identity-trust' /tmp/delivery-identity.log
+          cat /tmp/delivery-identity.log
+
+          echo "CONFIRMED TRUST-BOUNDARY GAP: external Delivery accepts a host-PR branch identity that does not match the governed consumer Git branch."
