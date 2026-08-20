@@ -1,0 +1,269 @@
+name: Risk Downgrade After Managed Checkpoint
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-risk-downgrade-after-checkpoint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Establish trusted L1 checkpoint then downgrade to L0 without Resync
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-RISK-DOWNGRADE-CHECKPOINT
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+
+          CONSUMER="$RUNNER_TEMP/aclh-risk-checkpoint-consumer"
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src" "$CONSUMER/.harness/project"
+          cd "$CONSUMER"
+          git init -b agent/risk-downgrade-checkpoint
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-risk-checkpoint-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          echo 'export const value = 1;' > src/value.ts
+          cat > .harness/project/profile.yaml <<'YAML'
+          project:
+            name: "risk-checkpoint-consumer"
+            type: "backend"
+          tech_stack:
+            language: "TypeScript"
+          YAML
+          cat > .harness/project/architecture.yaml <<'YAML'
+          modules:
+            - name: Core
+              path: src
+              responsibility: "Controlled value module."
+              depends_on: []
+          YAML
+          git add .
+          git commit -m "initial consumer"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-RISK-DOWNGRADE-CHECKPOINT
+          classification:
+            primary: feature
+            traits: [behavior-change]
+            confidence: high
+            rationale:
+              - "Exercise risk downgrade after an established managed checkpoint."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-RISK-DOWNGRADE-CHECKPOINT
+          classification:
+            ref: classification.yaml
+          selected:
+            - task-decomposition
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          echo 'export const value = 2;' > src/value.ts
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+          - [x] Establish a trusted L1 managed checkpoint.
+          - [x] Characterize risk downgrade after a later human change.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+          - [x] Complete initial L1 Delivery.
+          - [x] Apply a later human change and downgrade risk without Resync.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+          - [x] Canonical check/typecheck/test gates at the L1 checkpoint.
+
+          ## Verification Strategy
+          strategy: tdd
+          - [x] RED: establish L1 requirements
+          - [x] GREEN: baseline gates pass
+          - [x] REFACTOR: probe post-checkpoint downgrade separately
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+          - Established L1 baseline before downgrade probe.
+          MD
+          cat > "$TASK_DIR/task-decomposition.md" <<'MD'
+          # Task Slices
+          - Establish baseline.
+          - Apply later human change.
+
+          # Acceptance Boundaries
+          - Observe governance depth before and after risk mutation.
+
+          # Dependencies
+          - None.
+          MD
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-RISK-DOWNGRADE-CHECKPOINT
+          assessment:
+            source: codex
+            summary: "No extra declared gaps in this policy-depth probe."
+          entries: []
+          YAML
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Trusted L1 checkpoint before risk downgrade',
+            notes: 'Fresh Builder self-review for the initial L1 Delivery only.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `baseline answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/risk-checkpoint-l1-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/risk-checkpoint-l1-delivery.log
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/risk-checkpoint-clean.json
+          grep -q '"status": "clean"' /tmp/risk-checkpoint-clean.json
+          echo "CONFIRMED CONTROL: complete L1 Delivery established a clean managed checkpoint."
+
+          # Later human change: make the skipped L1 machine gates deterministically red.
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-risk-checkpoint-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(42)\"",
+              "test": "node -e \"process.exit(43)\""
+            }
+          }
+          JSON
+          echo 'export const value = 3;' > src/value.ts
+          git add package.json src/value.ts
+          git commit -m "human: change code and break L1 machine gates"
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          if (state.risk_level !== 'L1') throw new Error('expected L1 before downgrade');
+          state.risk_level = 'L0';
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          set +e
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/risk-checkpoint-changed.json
+          changed_status=${PIPESTATUS[0]}
+          set -e
+          test "$changed_status" -eq 2
+          grep -q '"status": "changed"' /tmp/risk-checkpoint-changed.json
+
+          test ! -e "$CONSUMER/.git/aclh/resync/$TASK_ID.json"
+          echo "CONFIRMED PROBE: managed checkpoint is changed and no Resync report exists."
+
+          set +e
+          npm run typecheck >/tmp/risk-checkpoint-typecheck-red.log 2>&1
+          typecheck_status=$?
+          npm test >/tmp/risk-checkpoint-test-red.log 2>&1
+          test_status=$?
+          set -e
+          test "$typecheck_status" -ne 0
+          test "$test_status" -ne 0
+
+          # Refresh current Context without preparing Resync.
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+
+          # L0 now requires only check. Do not refresh self-review, typecheck, test, or any Resync/Re-plan artifact.
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify | tee /tmp/risk-checkpoint-l0-evidence.log
+          grep -q 'risk L0, required gates = check' /tmp/risk-checkpoint-l0-evidence.log
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+
+          old_self_review=$(cd "$ACLH_RUNTIME_ROOT" && node --input-type=module -e "import fs from 'node:fs'; import { parse } from 'yaml'; const s=parse(fs.readFileSync(process.env.ACLH_PROJECT_ROOT + '/docs/wip/' + process.env.TASK_ID + '/.state.yaml','utf8')); console.log(s.self_review.run_at)")
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/risk-checkpoint-l0-delivery.log
+          grep -q 'applying risk L0' /tmp/risk-checkpoint-l0-delivery.log
+          grep -q 'builder self-review not required by risk L0' /tmp/risk-checkpoint-l0-delivery.log
+          grep -q 'PASS for risk L0 / P3 Skill Plan' /tmp/risk-checkpoint-l0-delivery.log
+
+          new_self_review=$(cd "$ACLH_RUNTIME_ROOT" && node --input-type=module -e "import fs from 'node:fs'; import { parse } from 'yaml'; const s=parse(fs.readFileSync(process.env.ACLH_PROJECT_ROOT + '/docs/wip/' + process.env.TASK_ID + '/.state.yaml','utf8')); console.log(s.self_review.run_at)")
+          test "$old_self_review" = "$new_self_review"
+
+          set +e
+          npm run typecheck >/dev/null 2>&1
+          typecheck_after=$?
+          npm test >/dev/null 2>&1
+          test_after=$?
+          set -e
+          test "$typecheck_after" -ne 0
+          test "$test_after" -ne 0
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/risk-checkpoint-after-l0.json
+          grep -q '"status": "clean"' /tmp/risk-checkpoint-after-l0.json
+          test ! -e "$CONSUMER/.git/aclh/resync/$TASK_ID.json"
+
+          echo "CONFIRMED GOVERNANCE GAP: after a trusted L1 checkpoint, a later human code change plus direct risk downgrade to L0 can skip Resync, reuse the old self-review, ignore red typecheck/test, pass Delivery, and establish a new clean managed checkpoint."
