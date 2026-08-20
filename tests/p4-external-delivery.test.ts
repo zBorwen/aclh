@@ -120,10 +120,24 @@ test('external L2 consumer passes the complete P3 delivery chain without embedde
     const contextVerify = run(projectRoot, 'context-select.ts', [taskId, '--verify']);
     assert.equal(contextVerify.status, 0, contextVerify.stderr || contextVerify.stdout);
 
+    fs.writeFileSync(path.join(taskDir, 'verification-gaps.yaml'), stringifyYaml({
+      version: '1.0', task_id: taskId,
+      assessment: { source: 'codex', summary: 'Behavioral regression is covered by the canonical test gate.' },
+      entries: [{
+        id: 'behavior-regression', dimension: 'behavior-regression',
+        description: 'Verify the external lifecycle regression behavior.', status: 'machine-covered',
+        machine_gates: ['test'],
+      }],
+    }));
+    const gapCheck = run(projectRoot, 'verification-gaps.ts', [taskId, '--check']);
+    assert.equal(gapCheck.status, 0, gapCheck.stderr || gapCheck.stdout);
+
     for (const gate of ['check', 'typecheck', 'test']) {
       const evidence = run(projectRoot, 'evidence.ts', [taskId, '--gate', gate]);
       assert.equal(evidence.status, 0, `${gate}: ${evidence.stderr || evidence.stdout}`);
     }
+    const gapVerify = run(projectRoot, 'verification-gaps.ts', [taskId, '--verify']);
+    assert.equal(gapVerify.status, 0, gapVerify.stderr || gapVerify.stdout);
 
     const prepare = run(projectRoot, 'independent-review.ts', [taskId, '--prepare']);
     assert.equal(prepare.status, 0, prepare.stderr || prepare.stdout);
