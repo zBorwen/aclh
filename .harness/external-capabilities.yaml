@@ -1,6 +1,6 @@
 version: "1.0"
 external_mode:
-  status: retrieval-ready
+  status: verification-gaps-ready
   commands:
     init-task: supported
     classification: supported
@@ -12,6 +12,7 @@ external_mode:
     task-identity: supported
     verification-plan: supported
     skill-output: supported
+    verification-gaps: supported
     evidence: supported
     skill-evidence: supported
     self-review: supported
