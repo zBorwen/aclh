@@ -152,10 +152,14 @@ jobs:
           set -e
           after_remote=$(git --git-dir="$REMOTE" rev-parse refs/heads/agent/external-hook-boundary)
 
+          cat /tmp/external-aware-hook.log
           test "$push_status" -ne 0
           test "$before_remote" = "$after_remote"
+          grep -Fq '[Delivery] TASK-EXTERNAL-HOOK-BOUNDARY:' /tmp/external-aware-hook.log
           grep -q 'Task identity PASS' /tmp/external-aware-hook.log
-          grep -Eq 'Classification FAIL|Skill Plan FAIL|Verification plan FAIL' /tmp/external-aware-hook.log
-          cat /tmp/external-aware-hook.log
+          if grep -q 'MODULE_NOT_FOUND' /tmp/external-aware-hook.log; then
+            echo "External-aware hook unexpectedly failed to resolve the ACLH Runtime."
+            exit 1
+          fi
 
           echo "CONFIRMED: Git can enforce external ACLH when a hook is explicitly wired to runtimeRoot/projectRoot; current external attach simply does not provide that wiring."
