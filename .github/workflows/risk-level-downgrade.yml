@@ -1,0 +1,278 @@
+name: Risk Level Downgrade Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-risk-downgrade:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Initialize an external Task at L2
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-RISK-DOWNGRADE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+
+          CONSUMER="$RUNNER_TEMP/aclh-risk-downgrade-consumer"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src" "$CONSUMER/.harness/project"
+          cd "$CONSUMER"
+          git init -b agent/risk-downgrade
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-risk-downgrade-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(42)\"",
+              "test": "node -e \"process.exit(43)\""
+            }
+          }
+          JSON
+          echo 'export const value = 1;' > src/value.ts
+          cat > .harness/project/profile.yaml <<'YAML'
+          project:
+            name: "risk-downgrade-consumer"
+            type: "backend"
+          tech_stack:
+            language: "TypeScript"
+          YAML
+          cat > .harness/project/architecture.yaml <<'YAML'
+          modules:
+            - name: Core
+              path: src
+              responsibility: "Controlled value module."
+              depends_on: []
+          YAML
+
+          git add .
+          git commit -m "initial consumer"
+
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L2 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          grep -q 'risk L2' "$TASK_DIR/changelog.md"
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse } from 'yaml';
+          const state = parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`, 'utf8'));
+          if (state.risk_level !== 'L2') throw new Error(`expected initial L2, got ${state.risk_level}`);
+          NODE
+
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: Prepare a valid P3 Task without L2 review artifacts
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-RISK-DOWNGRADE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-RISK-DOWNGRADE
+          classification:
+            primary: feature
+            traits: [behavior-change]
+            confidence: high
+            rationale:
+              - "Exercise whether Task risk can be downgraded after L2 initialization."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-RISK-DOWNGRADE
+          classification:
+            ref: classification.yaml
+          selected:
+            - task-decomposition
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          echo 'export const value = 2;' > "$CONSUMER/src/value.ts"
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] Change the controlled value.
+          - [x] Characterize risk downgrade enforcement.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Initialize at L2.
+          - [x] Attempt an unaudited downgrade to L0.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Observe canonical gate selection after risk mutation.
+
+          ## Verification Strategy
+
+          strategy: tdd
+
+          - [x] RED: canonical typecheck/test are deliberately failing
+          - [x] GREEN: characterize actual Delivery policy after downgrade
+          - [x] REFACTOR: do not change Runtime during validation
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Task was initialized at risk L2 for downgrade validation.
+          MD
+          cat > "$TASK_DIR/task-decomposition.md" <<'MD'
+          # Task Slices
+          - One controlled value change.
+
+          # Acceptance Boundaries
+          - Observe which governance gates Delivery actually requires.
+
+          # Dependencies
+          - None.
+          MD
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-RISK-DOWNGRADE
+          assessment:
+            source: codex
+            summary: "No additional explicit verification gaps are declared in this risk-policy probe."
+          entries: []
+          YAML
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+
+      - name: Prove the L2 canonical machine gates are actually red
+        env:
+          ACLH_PROJECT_ROOT: ${{ env.CONSUMER }}
+        run: |
+          cd "$CONSUMER"
+          set +e
+          npm run typecheck >/tmp/risk-typecheck.log 2>&1
+          typecheck_status=$?
+          npm test >/tmp/risk-test.log 2>&1
+          test_status=$?
+          set -e
+          test "$typecheck_status" -ne 0
+          test "$test_status" -ne 0
+          echo "CONFIRMED CONTROL: canonical typecheck and test are red before risk downgrade."
+
+      - name: Mutate Task risk from L2 to L0 with no approval record
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ env.CONSUMER }}
+          TASK_ID: TASK-RISK-DOWNGRADE
+        run: |
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          if (state.risk_level !== 'L2') throw new Error('expected L2 before mutation');
+          state.risk_level = 'L0';
+          fs.writeFileSync(file, stringify(state));
+          NODE
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse } from 'yaml';
+          const dir = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}`;
+          const state = parse(fs.readFileSync(`${dir}/.state.yaml`, 'utf8'));
+          if (state.risk_level !== 'L0') throw new Error('risk mutation did not apply');
+          const changelog = fs.readFileSync(`${dir}/changelog.md`, 'utf8');
+          if (!changelog.includes('initialized at risk L2')) throw new Error('initial L2 provenance missing from fixture changelog');
+          NODE
+
+          test ! -e "$ACLH_PROJECT_ROOT/docs/wip/$TASK_ID/independent-review.json"
+          echo "CONFIRMED PROBE: Task state now says L0 while its initialization provenance still says L2; no independent review exists."
+
+      - name: Produce only the downgraded L0 Evidence set
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ env.CONSUMER }}
+          TASK_ID: TASK-RISK-DOWNGRADE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          cd "$ACLH_PROJECT_ROOT"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify | tee /tmp/risk-evidence-l0.log
+          grep -q 'risk L0, required gates = check' /tmp/risk-evidence-l0.log
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+
+          # No Builder self-review is authored at all for the downgraded task.
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse } from 'yaml';
+          const state = parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`, 'utf8'));
+          if (state.self_review && state.self_review.run_at) throw new Error('unexpected Builder self-review exists');
+          NODE
+
+      - name: Prove Delivery trusts the mutable downgraded risk
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          ACLH_PROJECT_ROOT: ${{ env.CONSUMER }}
+          TASK_ID: TASK-RISK-DOWNGRADE
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          cd "$ACLH_PROJECT_ROOT"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/risk-downgrade-delivery.log
+          grep -q 'applying risk L0 with P3 Skill Plan' /tmp/risk-downgrade-delivery.log
+          grep -q 'builder self-review not required by risk L0' /tmp/risk-downgrade-delivery.log
+          grep -q 'independent review not required by risk L0' /tmp/risk-downgrade-delivery.log
+          grep -q 'PASS for risk L0 / P3 Skill Plan' /tmp/risk-downgrade-delivery.log
+
+          # Red canonical gates remain red; Delivery never required them after the downgrade.
+          set +e
+          npm run typecheck >/tmp/risk-typecheck-after.log 2>&1
+          typecheck_status=$?
+          npm test >/tmp/risk-test-after.log 2>&1
+          test_status=$?
+          set -e
+          test "$typecheck_status" -ne 0
+          test "$test_status" -ne 0
+
+          test ! -e "$ACLH_PROJECT_ROOT/docs/wip/$TASK_ID/independent-review.json"
+          echo "CONFIRMED GOVERNANCE GAP: an L2-initialized Task can be downgraded by directly editing state.risk_level to L0; Delivery then requires only check, skips Builder self-review and independent review, ignores still-red typecheck/test gates, and records PASS at L0."
