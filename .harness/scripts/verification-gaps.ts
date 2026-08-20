@@ -1,5 +1,12 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
 import path from 'node:path';
+import {
+  browserRepositorySnapshot,
+  browserVerificationPath,
+  browserVerificationStatus,
+  loadBrowserVerification,
+} from './lib/browser-verification-runtime.ts';
 import {
   ALL_GATES,
   evidenceExclusions,
@@ -24,6 +31,19 @@ const taskDir = path.join(roots.projectWipDir, taskId);
 const registryPath = path.join(taskDir, 'verification-gaps.yaml');
 const evidencePath = path.join(taskDir, 'evidence.json');
 
+function currentBrowserScript(): string {
+  const packagePath = path.join(roots.projectRoot, 'package.json');
+  if (!fs.existsSync(packagePath)) throw new Error('browser proof requires consumer package.json');
+  let parsed: unknown;
+  try { parsed = JSON.parse(fs.readFileSync(packagePath, 'utf8')); }
+  catch { throw new Error('browser proof requires valid consumer package.json'); }
+  const record = typeof parsed === 'object' && parsed !== null ? parsed as { scripts?: unknown } : {};
+  const scripts = typeof record.scripts === 'object' && record.scripts !== null ? record.scripts as Record<string, unknown> : {};
+  const command = scripts['test:browser'];
+  if (typeof command !== 'string' || command.trim().length === 0) throw new Error('browser proof requires package.json script "test:browser"');
+  return command.trim();
+}
+
 try {
   const registry = loadVerificationGapRegistry(registryPath, taskId);
   const uncovered = registry.entries.filter(entry => entry.status === 'uncovered');
@@ -36,18 +56,34 @@ try {
   const humanEntries = registry.entries.filter(entry => entry.status === 'human-covered');
 
   if (mode === '--verify' && machineEntries.length > 0) {
-    const { evidence, legacyV1 } = loadEvidenceFile(taskId, evidencePath);
-    if (legacyV1) throw new Error('legacy Evidence v1.0 cannot satisfy Verification Gap coverage');
-    const current = repositorySnapshot(roots.projectRoot, evidenceExclusions(roots.projectRoot, taskDir));
-    const commandSpecs = resolveGateCommandSpecs(roots.runtimeRoot, roots.projectRoot);
-    const expectedCommands = Object.fromEntries(ALL_GATES.map(gate => [gate, commandSpecs[gate].command])) as Record<GateName, string>;
-    const required = [...new Set(machineEntries.flatMap(entry => entry.machine_gates ?? []))] as GateName[];
-    const statuses = verifyEvidenceGates(evidence, current, required, expectedCommands);
-    for (const entry of machineEntries) {
-      for (const gate of entry.machine_gates ?? []) {
-        const status = statuses.get(gate);
+    const requiredGates = [...new Set(machineEntries.flatMap(entry => entry.machine_gates ?? []))] as GateName[];
+    if (requiredGates.length > 0) {
+      const { evidence, legacyV1 } = loadEvidenceFile(taskId, evidencePath);
+      if (legacyV1) throw new Error('legacy Evidence v1.0 cannot satisfy Verification Gap coverage');
+      const current = repositorySnapshot(roots.projectRoot, evidenceExclusions(roots.projectRoot, taskDir));
+      const commandSpecs = resolveGateCommandSpecs(roots.runtimeRoot, roots.projectRoot);
+      const expectedCommands = Object.fromEntries(ALL_GATES.map(gate => [gate, commandSpecs[gate].command])) as Record<GateName, string>;
+      const statuses = verifyEvidenceGates(evidence, current, requiredGates, expectedCommands);
+      for (const entry of machineEntries) {
+        for (const gate of entry.machine_gates ?? []) {
+          const status = statuses.get(gate);
+          if (status !== 'fresh') {
+            console.error(`Verification Gap FAIL: ${entry.id} requires fresh canonical ${gate} Evidence; status=${String(status)}`);
+            process.exit(1);
+          }
+        }
+      }
+    }
+
+    const requiresBrowser = machineEntries.some(entry => entry.machine_proofs?.includes('browser'));
+    if (requiresBrowser) {
+      const scriptCommand = currentBrowserScript();
+      const record = loadBrowserVerification(browserVerificationPath(taskDir), taskId);
+      const current = browserRepositorySnapshot(roots.projectRoot, taskDir);
+      const status = browserVerificationStatus(record, current, scriptCommand);
+      for (const entry of machineEntries.filter(item => item.machine_proofs?.includes('browser'))) {
         if (status !== 'fresh') {
-          console.error(`Verification Gap FAIL: ${entry.id} requires fresh canonical ${gate} Evidence; status=${String(status)}`);
+          console.error(`Verification Gap FAIL: ${entry.id} requires fresh browser verification proof; status=${status}`);
           process.exit(1);
         }
       }
