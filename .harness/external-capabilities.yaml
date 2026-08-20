@@ -1,11 +1,12 @@
 version: "1.0"
 external_mode:
-  status: readiness-ready
+  status: bootstrap-ready
   commands:
     init-task: supported
     classification: supported
     skill-plan: supported
     context-readiness: supported
+    context-bootstrap: supported
     context-scope: supported
     context-select: supported
     task-identity: supported
