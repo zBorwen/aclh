@@ -1,0 +1,299 @@
+name: Context Knowledge Freshness Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-context-knowledge-freshness:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Create external L1 compatibility Task and generate Context from Decision A
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-CONTEXT-KNOWLEDGE-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+
+          CONSUMER="$RUNNER_TEMP/aclh-context-knowledge-consumer"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src" "$CONSUMER/.harness/project"
+          cd "$CONSUMER"
+          git init -b agent/context-knowledge-freshness
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-context-knowledge-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          echo 'export const value = 1;' > src/value.ts
+          cat > .harness/project/architecture.yaml <<'YAML'
+          modules:
+            - name: Core
+              path: src
+              responsibility: "Controlled compatibility surface."
+              depends_on: []
+          boundaries:
+            rules:
+              - "Core exports remain backward-compatible."
+          YAML
+          cat > .harness/project/decisions.yaml <<'YAML'
+          entries:
+            - id: decision-a
+              module: Core
+              category: compatibility
+              applies_to:
+                - src/value.ts
+              decision: "Decision A is the active compatibility rule."
+              rationale: "This record should be selected into the initial bounded Context."
+          YAML
+
+          git add .
+          git commit -m "initial consumer with Decision A"
+
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-CONTEXT-KNOWLEDGE-FRESHNESS
+          classification:
+            primary: feature
+            traits: [behavior-change, compatibility-sensitive]
+            confidence: high
+            rationale:
+              - "Exercise bounded compatibility knowledge freshness after the source changes."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-CONTEXT-KNOWLEDGE-FRESHNESS
+          classification:
+            ref: classification.yaml
+          selected:
+            - compatibility-verification
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          echo 'export const value = 2;' > src/value.ts
+
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] Change the controlled compatibility surface.
+          - [x] Verify Context freshness when the knowledge source changes.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Generate bounded Context from Decision A.
+          - [x] Replace the source with Decision B without regenerating Context.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Canonical check/typecheck/test gates.
+
+          ## Verification Strategy
+
+          strategy: tdd
+
+          - [x] RED: establish selected knowledge A
+          - [x] GREEN: probe freshness after source mutation
+          - [x] REFACTOR: isolate knowledge-source freshness
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Added controlled Context knowledge freshness validation.
+          MD
+          cat > "$TASK_DIR/compatibility-verification.md" <<'MD'
+          # Compatibility Boundaries
+          - The Core export remains a number.
+
+          # Preserved Behavior
+          - Existing consumers can still load the export.
+
+          # Risks
+          - Stale bounded knowledge could describe an obsolete compatibility rule.
+
+          # Evidence
+          - Canonical typecheck and test Evidence are required.
+          MD
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-CONTEXT-KNOWLEDGE-FRESHNESS
+          assessment:
+            source: codex
+            summary: "The isolated behavior is covered by canonical machine gates."
+          entries:
+            - id: behavior-regression
+              dimension: behavior-regression
+              description: "Verify the isolated compatibility surface remains machine-green."
+              status: machine-covered
+              machine_gates: [test]
+          YAML
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const context = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/context.json`, 'utf8'));
+          const ids = context.selected.decisions.items.map(item => item.entry.id);
+          if (!ids.includes('decision-a')) throw new Error('Decision A was not selected into initial Context');
+          if (ids.includes('decision-b')) throw new Error('Decision B unexpectedly present before source mutation');
+          NODE
+
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: Replace the required knowledge source with Decision B
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-CONTEXT-KNOWLEDGE-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          cat > .harness/project/decisions.yaml <<'YAML'
+          entries:
+            - id: decision-b
+              module: Core
+              category: compatibility
+              applies_to:
+                - src/value.ts
+              decision: "Decision B replaced Decision A and is now the active compatibility rule."
+              rationale: "Current bounded Context should become stale when this source changes."
+          YAML
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify --json | tee /tmp/knowledge-readiness-b.json
+          grep -q '"ready": true' /tmp/knowledge-readiness-b.json
+
+          # Project knowledge is excluded from Context Scope changed-files, so Scope remains fresh.
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify | tee /tmp/knowledge-scope-after-b.log
+          grep -q 'Context Scope PASS' /tmp/knowledge-scope-after-b.log
+
+      - name: Prove old bounded Context still verifies after Decision source changes
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-CONTEXT-KNOWLEDGE-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify | tee /tmp/stale-knowledge-context-verify.log
+          grep -q 'Context PASS' /tmp/stale-knowledge-context-verify.log
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const root = process.env.ACLH_PROJECT_ROOT;
+          const task = process.env.TASK_ID;
+          const live = fs.readFileSync(`${root}/.harness/project/decisions.yaml`, 'utf8');
+          const context = JSON.parse(fs.readFileSync(`${root}/docs/wip/${task}/context.json`, 'utf8'));
+          const ids = context.selected.decisions.items.map(item => item.entry.id);
+          if (!live.includes('decision-b')) throw new Error('Live source is not Decision B');
+          if (live.includes('decision-a')) throw new Error('Live source still contains Decision A');
+          if (!ids.includes('decision-a')) throw new Error('Old Context no longer contains Decision A');
+          if (ids.includes('decision-b')) throw new Error('Old Context unexpectedly contains Decision B');
+          NODE
+
+          echo "CONFIRMED FRESHNESS GAP: live required decisions source contains B, context.json still embeds A, and context-select --verify reports PASS."
+
+      - name: Refresh every non-Context trust artifact against current repository state
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-CONTEXT-KNOWLEDGE-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Context knowledge freshness validation',
+            notes: 'Fresh Builder self-review after Decision B became the live source; context.json is intentionally not regenerated.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `knowledge-freshness answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+
+          # Reconfirm Context still contains A immediately before Delivery.
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          grep -q 'decision-a' "$CONSUMER/docs/wip/$TASK_ID/context.json"
+          grep -q 'decision-b' "$CONSUMER/.harness/project/decisions.yaml"
+
+      - name: Prove Delivery accepts stale bounded knowledge Context
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-CONTEXT-KNOWLEDGE-FRESHNESS
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/stale-knowledge-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/stale-knowledge-delivery.log
+
+          grep -q 'decision-a' "$CONSUMER/docs/wip/$TASK_ID/context.json"
+          grep -q 'decision-b' "$CONSUMER/.harness/project/decisions.yaml"
+
+          echo "CONFIRMED GOVERNANCE GAP: required bounded knowledge can change from Decision A to Decision B without invalidating context.json; after all other trust artifacts are refreshed, Delivery still accepts the stale Context containing A."
