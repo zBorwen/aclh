@@ -1,0 +1,280 @@
+name: Minimal Context Readiness Floor Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-minimal-context:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Create clean external L1 consumer with intentionally weak Context
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-MINIMAL-CONTEXT-FLOOR
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+
+          CONSUMER="$RUNNER_TEMP/aclh-minimal-context-consumer"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src"
+          cd "$CONSUMER"
+          git init -b agent/minimal-context-floor
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-minimal-context-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          echo 'export const value = 1;' > src/value.ts
+          git add .
+          git commit -m "initial consumer"
+
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-MINIMAL-CONTEXT-FLOOR
+          classification:
+            primary: feature
+            traits: [behavior-change, compatibility-sensitive]
+            confidence: high
+            rationale:
+              - "Exercise the minimum semantic floor accepted by required Context readiness."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-MINIMAL-CONTEXT-FLOOR
+          classification:
+            ref: classification.yaml
+          selected:
+            - compatibility-verification
+            - task-decomposition
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          echo 'export const value = 2;' > src/value.ts
+
+          mkdir -p .harness/project
+          cat > .harness/project/profile.yaml <<'YAML'
+          project:
+            name: "x"
+            type: "?"
+          YAML
+          cat > .harness/project/architecture.yaml <<'YAML'
+          modules:
+            - name: "x"
+              path: "nowhere"
+          YAML
+          cat > .harness/project/decisions.yaml <<'YAML'
+          entries: []
+          YAML
+
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] Characterize the minimum Context readiness contract.
+          - [x] Keep machine gates green so Context is the variable under test.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Supply structurally valid but minimally informative required Context.
+          - [x] Observe Context Selection and Delivery behavior.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Canonical check/typecheck/test gates.
+
+          ## Verification Strategy
+
+          strategy: tdd
+
+          - [x] RED: identify semantic readiness floor
+          - [x] GREEN: characterize accepted minimum
+          - [x] REFACTOR: do not change Runtime during validation
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Added controlled minimal-Context validation fixture.
+          MD
+          cat > "$TASK_DIR/task-decomposition.md" <<'MD'
+          # Task Slices
+          - One isolated value change.
+
+          # Acceptance Boundaries
+          - Canonical machine gates remain green.
+
+          # Dependencies
+          - None identified by this controlled fixture.
+          MD
+          cat > "$TASK_DIR/compatibility-verification.md" <<'MD'
+          # Compatibility Boundaries
+          - The controlled exported value remains a number.
+
+          # Preserved Behavior
+          - The package remains loadable.
+
+          # Risks
+          - No additional semantic project knowledge is supplied in this fixture.
+
+          # Evidence
+          - Canonical typecheck and test gates are required.
+          MD
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-MINIMAL-CONTEXT-FLOOR
+          assessment:
+            source: codex
+            summary: "The isolated machine-verifiable behavior is covered by canonical gates."
+          entries:
+            - id: behavior-regression
+              dimension: behavior-regression
+              description: "Verify the isolated consumer still passes."
+              status: machine-covered
+              machine_gates: [test]
+          YAML
+
+          cd "$ACLH_RUNTIME_ROOT"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'Minimal Context readiness characterization',
+            notes: 'Fresh Builder self-review for the controlled Context fixture.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `context-floor answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+          cd "$CONSUMER"
+
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: Prove weak required sources are considered ready
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-MINIMAL-CONTEXT-FLOOR
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify --json | tee /tmp/minimal-readiness.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('/tmp/minimal-readiness.json', 'utf8'));
+          if (!report.ready) throw new Error('Minimal Context unexpectedly blocked readiness');
+          for (const id of ['project-profile', 'architecture', 'decisions']) {
+            const source = report.sources.find(item => item.id === id);
+            if (!source || source.status !== 'ready') throw new Error(`${id} was not accepted as ready`);
+          }
+          NODE
+
+          echo "CONFIRMED FLOOR: project-profile(name=x,type=?), unrelated architecture(name=x,path=nowhere), and decisions entries=[] all satisfy current minimal Readiness."
+
+      - name: Prove required Context can resolve to no relevant architecture or decisions
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-MINIMAL-CONTEXT-FLOOR
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const context = JSON.parse(fs.readFileSync(`${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/context.json`, 'utf8'));
+          if (context.requirements['architecture']?.level !== 'required') throw new Error('architecture should be required');
+          if (context.requirements['project-profile']?.level !== 'required') throw new Error('project-profile should be required');
+          if (context.requirements['decisions']?.level !== 'required') throw new Error('decisions should be required');
+          if (!Array.isArray(context.selected.architecture?.modules) || context.selected.architecture.modules.length !== 0) {
+            throw new Error('Expected required architecture to select zero relevant modules');
+          }
+          if (context.selected.decisions?.total_matches !== 0 || context.selected.decisions?.items?.length !== 0) {
+            throw new Error('Expected required decisions to retrieve zero matches');
+          }
+          NODE
+
+          echo "CONFIRMED FLOOR: Context PASS can contain required architecture with zero selected modules and required decisions with zero retrieved matches."
+
+      - name: Complete all non-Context gates
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-MINIMAL-CONTEXT-FLOOR
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+
+      - name: Prove Delivery accepts the minimal semantic Context floor
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-MINIMAL-CONTEXT-FLOOR
+        run: |
+          export GITHUB_ACTIONS=false
+          unset GITHUB_HEAD_REF
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/minimal-context-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/minimal-context-delivery.log
+
+          echo "CONFIRMED DESIGN LIMIT: current Required Context semantics enforce a minimal structural readiness floor, not task-relevant semantic sufficiency. Delivery can PASS with required project-profile/architecture/decisions that contribute almost no useful task context."
