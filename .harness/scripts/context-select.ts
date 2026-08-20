@@ -120,8 +120,12 @@ function rankEntry(entry: GenericEntry, modules: Set<string>, tags: Set<string>,
   if ([...entryTags].some(t=>tags.has(t))) { score += scoring.tag_match ?? 3; reasons.push('tag'); }
   const fileRefs = [...arrayOfStrings(entry.affected_files), ...arrayOfStrings(entry.applies_to)];
   if (fileRefs.some(ref=>[...files].some(file=>ref.includes('*') ? matchesFilePattern(ref,file) : normalize(ref)===normalize(file)))) { score += scoring.file_match ?? 4; reasons.push('file'); }
+  const minimumScopeMatches = Number.isInteger(scoring.minimum_scope_matches) && scoring.minimum_scope_matches > 0
+    ? scoring.minimum_scope_matches
+    : 1;
+  if (reasons.length < minimumScopeMatches) return null;
   if (entry.severity === 'high' || entry.severity === 'critical') { score += scoring.high_severity_bonus ?? 2; reasons.push('severity'); }
-  return score > 0 ? {score,reasons,entry} : null;
+  return {score,reasons,entry};
 }
 function rankedTopK(entries: unknown, modules: Set<string>, tags: Set<string>, files: Set<string>, scoring: Record<string,number>, max: number): {items:RankedEntry[];total_matches:number} {
   const ranked = Array.isArray(entries)
