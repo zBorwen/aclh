@@ -72,8 +72,10 @@ if (hasSkillPlan) {
   verifyContextBoundary();
   run('verification-plan.ts', [taskId]);
   run('skill-output.ts', [taskId, '--verify']);
+  if (EXTERNAL_MODE) run('verification-gaps.ts', [taskId, '--check']);
   run('evidence.ts', [taskId, '--verify']);
   run('skill-evidence.ts', [taskId, '--verify']);
+  if (EXTERNAL_MODE) run('verification-gaps.ts', [taskId, '--verify']);
 } else {
   if (policy.context_required === true) {
     verifyContextBoundary();
