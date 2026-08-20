@@ -55,10 +55,12 @@ verification_strategies:
 default_verification_strategy: tdd
 
 # Metadata retrieval is bounded so project knowledge can grow without being
-# injected wholesale into every Codex context.
+# injected wholesale into every Codex context. Admission requires at least one
+# Scope relevance match; severity can only increase rank after admission.
 knowledge_retrieval:
   max_items_per_source: 5
   scoring:
+    minimum_scope_matches: 1
     module_match: 5
     file_match: 4
     tag_match: 3
