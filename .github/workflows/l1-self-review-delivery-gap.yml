@@ -1,0 +1,246 @@
+name: L1 Self Review Delivery Gap Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-l1-delivery-gap:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout ACLH Engine
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install ACLH dependencies
+        run: npm install
+
+      - name: Create clean external consumer and managed L1 baseline
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-L1-SELF-REVIEW-GAP
+        run: |
+          CONSUMER="$RUNNER_TEMP/aclh-l1-self-review-consumer"
+          rm -rf "$CONSUMER"
+          mkdir -p "$CONSUMER/src"
+          cd "$CONSUMER"
+          git init -b agent/l1-self-review-gap
+          git config user.email "aclh-validation@example.com"
+          git config user.name "ACLH Validation"
+          cat > package.json <<'JSON'
+          {
+            "name": "aclh-l1-self-review-consumer",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "typecheck": "node -e \"process.exit(0)\"",
+              "test": "node -e \"process.exit(0)\""
+            }
+          }
+          JSON
+          echo 'export const value = 1;' > src/value.ts
+          git add .
+          git commit -m "initial consumer"
+
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/init-task.ts" "$TASK_ID" --risk L1 --strategy tdd
+          TASK_DIR="$CONSUMER/docs/wip/$TASK_ID"
+
+          cat > "$TASK_DIR/classification.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-L1-SELF-REVIEW-GAP
+          classification:
+            primary: feature
+            traits: [behavior-change]
+            confidence: high
+            rationale:
+              - "Exercise L1 review freshness on a clean external consumer."
+            ambiguities: []
+            source: codex
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/classification.ts" "$TASK_ID" --verify
+
+          cat > "$TASK_DIR/skill-plan.yaml" <<'YAML'
+          version: "1.0"
+          task_id: TASK-L1-SELF-REVIEW-GAP
+          classification:
+            ref: classification.yaml
+          selected:
+            - regression-verification
+          YAML
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --resolve
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-plan.ts" "$TASK_ID" --verify
+
+          echo 'export const value = 2;' > src/value.ts
+          cat > "$TASK_DIR/spec.md" <<'MD'
+          # Spec
+
+          - [x] Managed L1 change has machine verification.
+          - [x] Builder self-review is recorded before handoff.
+          MD
+          cat > "$TASK_DIR/tasks.md" <<'MD'
+          # Tasks
+
+          - [x] Establish managed baseline.
+          - [x] Verify L1 delivery after a human handoff.
+          MD
+          cat > "$TASK_DIR/test-plan.md" <<'MD'
+          # Test Plan
+
+          - [x] Canonical check/typecheck/test gates.
+
+          ## Verification Strategy
+
+          strategy: tdd
+
+          - [x] RED: baseline change identified
+          - [x] GREEN: canonical gates pass
+          - [x] REFACTOR: governance freshness is evaluated
+          MD
+          cat > "$TASK_DIR/changelog.md" <<'MD'
+          # Changelog
+
+          - Managed L1 baseline established.
+          MD
+          cat > "$TASK_DIR/regression-verification.md" <<'MD'
+          # Regression Scenarios
+          - The clean consumer still passes after the managed value change.
+
+          # Observable Behavior
+          - Canonical test remains green.
+
+          # Test Coverage
+          - Consumer test command is the machine regression gate.
+
+          # Evidence
+          - Fresh canonical test Evidence is required.
+          MD
+          cat > "$TASK_DIR/verification-gaps.yaml" <<'YAML'
+          version: "1.1"
+          task_id: TASK-L1-SELF-REVIEW-GAP
+          assessment:
+            source: codex
+            summary: "The isolated behavior regression is covered by the canonical test gate."
+          entries:
+            - id: behavior-regression
+              dimension: behavior-regression
+              description: "Verify the clean consumer behavior after the change."
+              status: machine-covered
+              machine_gates: [test]
+          YAML
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { parse, stringify } from 'yaml';
+          const file = `${process.env.ACLH_PROJECT_ROOT}/docs/wip/${process.env.TASK_ID}/.state.yaml`;
+          const state = parse(fs.readFileSync(file, 'utf8'));
+          state.phase = 'testing';
+          state.status = 'active';
+          state.review_history = [];
+          state.self_review = {
+            run_at: new Date().toISOString(),
+            gaps_found: [],
+            root_fix_tracked: 'L1 delivery freshness validation fixture',
+            notes: 'This self-review belongs to the managed baseline before the later human commit.',
+            answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `baseline answer ${index + 1}`])),
+          };
+          fs.writeFileSync(file, stringify(state));
+          NODE
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID"
+
+          git add src "docs/wip/$TASK_ID"
+          git commit -m "managed: establish L1 reviewed baseline"
+
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --record
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/l1-baseline.json
+          grep -q '"status": "clean"' /tmp/l1-baseline.json
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: Simulate human commit after the L1 self-review
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-L1-SELF-REVIEW-GAP
+        run: |
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          cd "$CONSUMER"
+          echo 'export const value = 3;' > src/value.ts
+          git add src/value.ts
+          git commit -m "human: change value after self-review"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/resync.ts" "$TASK_ID" --prepare --json | tee /tmp/l1-resync.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('/tmp/l1-resync.json', 'utf8'));
+          if (!report.requirements.self_review_refresh) throw new Error('Resync must require self-review refresh');
+          if (!report.requirements.evidence_refresh) throw new Error('Resync must require Evidence refresh');
+          if (report.requirements.independent_review_refresh) throw new Error('L1 should not require independent review refresh');
+          if (!report.changes.committed_since_checkpoint.includes('src/value.ts')) throw new Error('human delta not isolated');
+          NODE
+
+      - name: Refresh every governed artifact except Builder self-review
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-L1-SELF-REVIEW-GAP
+        run: |
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --record unchanged --source codex
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-replan.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --generate
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --check
+
+          for gate in check typecheck test; do
+            node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --gate "$gate"
+          done
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" "$TASK_ID" --verify
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" "$TASK_ID" --verify
+
+          # The old self-review is intentionally not changed here.
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" "$TASK_ID" | tee /tmp/l1-stale-self-review.log
+          grep -q '\[PASS\] Adversarial Self-Review' /tmp/l1-stale-self-review.log
+
+      - name: Prove stale self-review can currently pass L1 Delivery
+        env:
+          ACLH_RUNTIME_ROOT: ${{ github.workspace }}
+          TASK_ID: TASK-L1-SELF-REVIEW-GAP
+        run: |
+          export ACLH_PROJECT_ROOT="$CONSUMER"
+          old_run_at=$(node --input-type=module -e "import fs from 'node:fs'; import { parse } from 'yaml'; const s=parse(fs.readFileSync(process.env.ACLH_PROJECT_ROOT + '/docs/wip/' + process.env.TASK_ID + '/.state.yaml','utf8')); console.log(s.self_review.run_at)")
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" "$TASK_ID" | tee /tmp/l1-delivery.log
+          grep -q 'PASS for risk L1 / P3 Skill Plan' /tmp/l1-delivery.log
+
+          new_run_at=$(node --input-type=module -e "import fs from 'node:fs'; import { parse } from 'yaml'; const s=parse(fs.readFileSync(process.env.ACLH_PROJECT_ROOT + '/docs/wip/' + process.env.TASK_ID + '/.state.yaml','utf8')); console.log(s.self_review.run_at)")
+          test "$old_run_at" = "$new_run_at"
+
+          node "$ACLH_RUNTIME_ROOT/.harness/scripts/managed-snapshot.ts" "$TASK_ID" --status --json | tee /tmp/l1-after-delivery.json
+          grep -q '"status": "clean"' /tmp/l1-after-delivery.json
+
+          echo "CONFIRMED GOVERNANCE GAP: L1 Delivery PASS accepted the pre-handoff self-review even though Resync explicitly required self_review_refresh=true."
+          echo "Delivery then recorded a new managed snapshot without changing self_review.run_at."
