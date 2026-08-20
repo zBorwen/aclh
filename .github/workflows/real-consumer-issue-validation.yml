@@ -28,7 +28,7 @@ jobs:
           node-version: 22
 
       - name: Install ACLH dependencies
-        run: npm ci
+        run: npm install
 
       - name: Prepare consumer dependencies
         run: |
