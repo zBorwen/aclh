@@ -39,6 +39,7 @@ try {
     explicitModules: strings(state.context_scope?.modules),
     explicitTags: strings(state.context_scope?.tags),
     explicitFiles: strings(state.context_scope?.files),
+    architecturePath: path.join(roots.projectRoot, '.harness/project/architecture.yaml'),
   });
   const output = contextScopePath(taskDir);
   if (mode === '--verify') {
