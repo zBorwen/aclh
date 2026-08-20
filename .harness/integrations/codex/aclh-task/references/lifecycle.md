@@ -121,39 +121,35 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/cont
 
 Bootstrap has a strict ownership boundary:
 
-- For missing required knowledge ledgers, Runtime may safely initialize the structural empty form `entries: []`.
+- For missing required knowledge ledgers, Runtime may safely initialize `entries: []`.
 - For semantic project Context such as `profile.yaml` or `architecture.yaml`, Runtime must not invent or overwrite content. Inspect the consumer repository and author the smallest factual project Context needed by the capability.
 - If an existing knowledge source is malformed/unusable, do not overwrite it automatically; repair it explicitly.
 
-After any bootstrap/authoring work, require Runtime validation:
+After bootstrap/authoring work, require Runtime validation:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-readiness.ts" <TASK_ID> --verify --json
 ```
 
-An empty but schema-valid knowledge ledger is a valid ready state; an empty semantic profile/architecture template is not.
+An empty schema-valid knowledge ledger is ready; an empty semantic profile/architecture template is not.
 
 ## 9. Generate and verify Context Scope
-
-Scope owns the task boundary before Context retrieval:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" <TASK_ID> --generate
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-scope.ts" <TASK_ID> --verify
 ```
 
-Scope combines business changed files with explicit task scope, maps files to project architecture modules, and expands dependencies exactly one hop from the frozen seed set. Context must consume the resolved Scope rather than silently widening it.
+Scope combines business changed files with explicit task scope, maps files to project architecture modules, and expands dependencies exactly one hop from the frozen seed set. Context must consume resolved Scope rather than silently widening it.
 
 ## 10. Generate or refresh Skill-aware Context
-
-Project-specific Context state belongs to the consumer; Skill/context contracts remain Engine-owned.
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" <TASK_ID> --generate
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/context-select.ts" <TASK_ID> --verify
 ```
 
-Read only the bounded selected Context. Show a compact bootstrap/resync summary, then continue unless a material ambiguity prevents safe work.
+Knowledge retrieval is bounded by Scope relevance before ranking. Severity may boost a relevant item but must never admit an unrelated item by itself. Read only the bounded selected Context.
 
 ## 11. Implement and produce governed outputs
 
@@ -164,11 +160,31 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/veri
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-output.ts" <TASK_ID> --verify
 ```
 
-Skill output structure is not semantic proof. After code/task content stabilizes, rerun readiness if project Context changed, then regenerate/verify Scope and Context before final Evidence.
+Skill output structure is not semantic proof. After code/task content stabilizes, rerun readiness when project Context changed, then regenerate/verify Scope and Context before final verification planning.
 
-## 12. Record canonical machine Evidence
+## 12. Finalize the Verification Gap Registry
 
-Determine the union of risk-required and verification-Skill-required gates. For each required gate:
+Before recording machine Evidence, inspect verification dimensions that canonical `check/typecheck/test` do not automatically prove, such as browser interaction, visual layout, runtime integration, accessibility, performance behavior, or architecture boundaries when relevant to the Task.
+
+Create consumer `docs/wip/<TASK_ID>/verification-gaps.yaml` with an explicit assessment and entries using one of:
+
+- `machine-covered`: declare one or more canonical `machine_gates`; the later `--verify` step requires those exact gates to have fresh canonical Evidence.
+- `human-covered`: include a real human coverage record with `source: human`, checker identity, timestamp, concrete procedure, and observed result. Builder Codex must never manufacture human provenance.
+- `uncovered`: record the remaining gap and why it is uncovered. Any uncovered entry blocks completion.
+
+Before Evidence, validate/finalize the registry structurally:
+
+```bash
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" <TASK_ID> --check
+```
+
+The registry is governed task state and is intentionally included in the Evidence repository fingerprint. Do not edit it after machine Evidence without rerunning stale Evidence.
+
+If required human coverage is not yet available, stop at that human-verification boundary before final Evidence rather than fabricating it.
+
+## 13. Record canonical machine Evidence
+
+Determine the union of risk-required, verification-Skill-required, and registry machine coverage gates. Record the canonical gates that are actually required:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" <TASK_ID> --gate <check|typecheck|test>
@@ -176,14 +192,17 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/evid
 
 External `check` executes the Engine checker against consumer source; `typecheck` and `test` execute consumer canonical npm scripts. Record only gates that truly ran.
 
-Then verify both Evidence dimensions:
+Then verify Evidence and registry coverage:
 
 ```bash
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/evidence.ts" <TASK_ID> --verify
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skill-evidence.ts" <TASK_ID> --verify
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/verification-gaps.ts" <TASK_ID> --verify
 ```
 
-## 13. Review, managed handoff, and delivery boundary
+The Gap Registry does not create a second PASS. `machine-covered` only succeeds by consuming fresh canonical Evidence.
+
+## 14. Review, managed handoff, and delivery boundary
 
 When risk requires Builder self-review:
 
@@ -211,8 +230,8 @@ After required independent review exists:
 ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/delivery-gate.ts" <TASK_ID>
 ```
 
-Delivery re-verifies Context readiness, Scope, Context, Evidence, and trust gates. If a changed Resync report exists, it also requires the matching fresh Skill Re-plan checkpoint. Successful Delivery records a fresh managed checkpoint.
+Delivery re-verifies Context readiness, Scope, Context, Verification Gap coverage, Evidence, and trust gates. If a changed Resync report exists, it also requires the matching fresh Skill Re-plan checkpoint. Successful Delivery records a fresh managed checkpoint.
 
-## 14. Completion report
+## 15. Completion report
 
-Report concrete state only: Task/branch, implementation summary, Classification, selected/resolved Skills, Context bootstrap/readiness/Scope state, handoff/Re-plan state, machine gates actually recorded, and delivery result or exact independent-review boundary still pending.
+Report concrete state only: Task/branch, implementation summary, Classification, selected/resolved Skills, Context bootstrap/readiness/Scope state, Verification Gap coverage, handoff/Re-plan state, machine gates actually recorded, and delivery result or exact human/independent-review boundary still pending.
