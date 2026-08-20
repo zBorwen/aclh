@@ -28,11 +28,11 @@ test('external capability manifest exposes only migrated commands', () => {
   const manifest = parseYaml(fs.readFileSync(path.join(ENGINE_ROOT, '.harness/external-capabilities.yaml'), 'utf8')) as {
     external_mode: { status: string; commands: Record<string, string> };
   };
-  assert.equal(manifest.external_mode.status, 'bootstrap-only');
+  assert.equal(manifest.external_mode.status, 'context-ready');
   assert.equal(manifest.external_mode.commands['init-task'], 'supported');
   assert.equal(manifest.external_mode.commands.classification, 'supported');
   assert.equal(manifest.external_mode.commands['skill-plan'], 'supported');
-  assert.equal(manifest.external_mode.commands['context-select'], 'pending');
+  assert.equal(manifest.external_mode.commands['context-select'], 'supported');
   assert.equal(manifest.external_mode.commands.evidence, 'pending');
 });
 

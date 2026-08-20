@@ -1,11 +1,11 @@
 version: "1.0"
 external_mode:
-  status: bootstrap-only
+  status: context-ready
   commands:
     init-task: supported
     classification: supported
     skill-plan: supported
-    context-select: pending
+    context-select: supported
     verification-plan: pending
     skill-output: pending
     evidence: pending

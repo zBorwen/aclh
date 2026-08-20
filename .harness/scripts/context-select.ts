@@ -3,10 +3,10 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import { loadClassification } from './lib/classification-runtime.ts';
 import { loadSkillPlan } from './lib/skill-plan-runtime.ts';
+import { resolveRuntimeRelative, resolveRuntimeRoots } from './lib/runtime-roots.ts';
 import {
   loadContextCapabilities,
   loadSkillCatalog,
@@ -21,17 +21,14 @@ interface GenericEntry { id?: unknown; module?: unknown; modules?: unknown; tags
 interface RankedEntry { score: number; reasons: string[]; entry: GenericEntry; }
 interface RequirementUsage { requiredBy: Set<string>; optionalBy: Set<string>; }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
+const roots = resolveRuntimeRoots(import.meta.url);
+const ROOT = roots.projectRoot;
 const PROJECT_DIR = process.env.ACLH_PROJECT_DIR
-  ? path.resolve(ROOT, process.env.ACLH_PROJECT_DIR)
+  ? (path.isAbsolute(process.env.ACLH_PROJECT_DIR) ? path.normalize(process.env.ACLH_PROJECT_DIR) : path.resolve(ROOT, process.env.ACLH_PROJECT_DIR))
   : path.join(ROOT, '.harness/project');
-const SKILLS_DIR = process.env.ACLH_SKILLS_DIR
-  ? path.resolve(ROOT, process.env.ACLH_SKILLS_DIR)
-  : path.join(ROOT, '.harness/skills');
-const CAPABILITY_REGISTRY = process.env.ACLH_CONTEXT_CAPABILITIES
-  ? path.resolve(ROOT, process.env.ACLH_CONTEXT_CAPABILITIES)
-  : path.join(ROOT, '.harness/context/capabilities.yaml');
+const SKILLS_DIR = resolveRuntimeRelative(roots.runtimeRoot, process.env.ACLH_SKILLS_DIR, '.harness/skills');
+const CAPABILITY_REGISTRY = resolveRuntimeRelative(roots.runtimeRoot, process.env.ACLH_CONTEXT_CAPABILITIES, '.harness/context/capabilities.yaml');
+const GOVERNANCE = path.join(roots.runtimeHarnessDir, 'governance.yaml');
 const taskId = process.argv[2];
 const mode = process.argv[3] ?? '--generate';
 if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId) || !['--generate','--verify'].includes(mode)) {
@@ -39,7 +36,7 @@ if (!taskId || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId) || !['--generate','-
   process.exit(1);
 }
 
-const taskDir = path.join(ROOT, 'docs/wip', taskId);
+const taskDir = path.join(roots.projectWipDir, taskId);
 const statePath = path.join(taskDir, '.state.yaml');
 const outputPath = path.join(taskDir, 'context.json');
 const skillPlanPath = path.join(taskDir, 'skill-plan.yaml');
@@ -54,7 +51,6 @@ function git(args: string[]): string {
 }
 function arrayOfStrings(value: unknown): string[] { return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []; }
 function loadYamlFile(file: string): any { return fs.existsSync(file) ? parseYaml(fs.readFileSync(file, 'utf8')) : {}; }
-function loadRootYaml(relative: string): any { return loadYamlFile(path.join(ROOT, relative)); }
 function loadProjectYaml(name: string): any { return loadYamlFile(path.join(PROJECT_DIR, name)); }
 function normalize(p: string): string { return p.replaceAll('\\','/').replace(/^\.\//,''); }
 function hashValue(value: unknown): string { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
@@ -147,7 +143,7 @@ function collectRequirements(resolved: string[], catalog: Map<string,SkillContra
   return requirements;
 }
 
-const governance = loadRootYaml('.harness/governance.yaml') as {
+const governance = loadYamlFile(GOVERNANCE) as {
   knowledge_retrieval?: { max_items_per_source?: unknown; scoring?: Record<string,unknown> };
 };
 const maxItemsRaw = governance.knowledge_retrieval?.max_items_per_source;
@@ -157,7 +153,7 @@ const scoring: Record<string,number> = {};
 for (const [key,value] of Object.entries(rawScoring)) if (typeof value === 'number') scoring[key] = value;
 const retrievalPolicySha = hashValue({maxItems,scoring});
 
-const state = loadRootYaml(normalize(path.relative(ROOT,statePath))) as {
+const state = loadYamlFile(statePath) as {
   identity?: { base_commit?: unknown };
   context_scope?: { modules?: unknown; tags?: unknown; files?: unknown };
 };
@@ -246,7 +242,7 @@ if (!isSkillAware) {
     basis:{base_commit:baseCommit,sha256:basis,changed_files:changed,explicit_scope:{modules:explicitModules,tags,files:explicitFiles}},
     retrieval:{max_items_per_source:maxItems,scoring},
     selected:{
-      profile:path.join(PROJECT_DIR,'profile.yaml').replaceAll('\\','/'),
+      profile:sourceDisplay(path.join(PROJECT_DIR,'profile.yaml')),
       modules:selectedModules,
       knowledge:{bugs,gotchas:gotchaEntries,decisions:decisionEntries}
     }
