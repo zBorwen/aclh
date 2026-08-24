@@ -15,6 +15,7 @@ import {
   type ContextScopeArtifact,
 } from './lib/context-scope-runtime.ts';
 import { loadSkillPlan } from './lib/skill-plan-runtime.ts';
+import { evidenceExclusions } from './lib/evidence-runtime.ts';
 import { resolveRuntimeRelative, resolveRuntimeRoots } from './lib/runtime-roots.ts';
 import {
   loadContextCapabilities,
@@ -70,9 +71,7 @@ function changedFiles(baseCommit: string, extraExcluded: string[] = []): string[
   const untracked = git(['ls-files','--others','--exclude-standard']).split('\n').filter(Boolean).map(normalize);
   const excluded = new Set([
     normalize(path.relative(ROOT, outputPath)),
-    normalize(path.relative(ROOT, path.join(taskDir,'evidence.json'))),
-    normalize(path.relative(ROOT, path.join(taskDir,'review-packet.md'))),
-    normalize(path.relative(ROOT, path.join(taskDir,'independent-review.json'))),
+    ...evidenceExclusions(ROOT, taskDir),
     ...extraExcluded.map(normalize),
   ]);
   return [...new Set([...tracked,...untracked])].filter(file=>!excluded.has(file)).sort();

@@ -94,6 +94,11 @@ test('Skill-aware Context differs by Skill Plan and binds repository content plu
     assert.equal(context.selected['bug-ledger'].items[0].entry.id, 'BUG-AUTH');
     assert.equal(run(['.harness/scripts/context-select.ts', taskId, '--verify'], env).status, 0);
 
+    fs.writeFileSync(path.join(dir, 'self-review-packet.md'), '# generated review packet\n');
+    fs.writeFileSync(path.join(dir, 'self-review.json'), '{"version":"1.0"}\n');
+    const afterSelfReview = run(['.harness/scripts/context-select.ts', taskId, '--verify'], env);
+    assert.equal(afterSelfReview.status, 0, afterSelfReview.stderr || afterSelfReview.stdout);
+
     fs.writeFileSync(sourceInput, 'v2');
     const contentStale = run(['.harness/scripts/context-select.ts', taskId, '--verify'], env);
     assert.notEqual(contentStale.status, 0);

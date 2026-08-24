@@ -9,6 +9,7 @@
 
 - [x] Add Runtime-owned self-review prepare and verify modes.
 - [x] Exclude self-review semantic outputs from canonical Evidence freshness.
+- [x] Exclude self-review semantic outputs from embedded Context freshness.
 - [x] Make Delivery Gate explicitly verify the snapshot-bound review.
 - [x] Update Resync to request refresh when a review artifact exists.
 - [x] Update embedded/external Adapter lifecycle instructions.

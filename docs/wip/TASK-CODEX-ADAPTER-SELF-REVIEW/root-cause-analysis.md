@@ -14,6 +14,7 @@ Builder self-review was modeled as mutable inline task state without a Runtime r
 
 - Self-review CLI and task-state template.
 - Evidence output exclusions.
+- Embedded Context output exclusions.
 - Delivery and Resync review gates.
 - Embedded and external Codex Adapter lifecycle instructions.
 - External self-review and complete-delivery tests.

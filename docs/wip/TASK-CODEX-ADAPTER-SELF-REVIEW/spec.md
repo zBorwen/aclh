@@ -21,6 +21,7 @@ The Codex Adapter told L1-L3 builders to run `self-review.ts` after machine Evid
 - [x] `self-review.ts <TASK_ID> --verify` requires a complete `self-review.json` bound to the current repository snapshot.
 - [x] A governed repository change makes the review stale.
 - [x] Recording self-review after canonical Evidence leaves Evidence fresh.
+- [x] Recording self-review after final Context leaves embedded Context fresh.
 - [x] A complete external L2 consumer delivery passes without manually editing `.state.yaml`.
 
 ## Constraints

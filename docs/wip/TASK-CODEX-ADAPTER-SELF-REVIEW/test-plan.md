@@ -13,11 +13,13 @@
 - [x] `--prepare` transitions `requirements` to `testing`.
 - [x] Fresh `self-review.json` passes verification.
 - [x] Review outputs do not stale check/typecheck/test Evidence.
+- [x] Review outputs do not stale embedded Skill-aware Context.
 - [x] A source mutation makes self-review verification fail.
 - [x] Full external L2 delivery accepts the fresh review and Independent Review.
 - [x] Full serial repository suite passes.
 - [x] Canonical `npm test` uses serial execution; the prior parallel command reproduced 12 repository-snapshot races.
 - [x] issue-management Adapter exercise reaches its policy boundary: identity, readiness, Scope, Context, verification plan and Skill outputs pass; Gap Registry blocks on missing canonical browser proof.
+- [x] Delivery Gate regression exposed and fixed the embedded Context exclusion missed by the external-consumer fixture.
 
 ## Verification Strategy
 
