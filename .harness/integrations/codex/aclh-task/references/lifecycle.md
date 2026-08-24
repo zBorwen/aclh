@@ -162,6 +162,14 @@ ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/skil
 
 Skill output structure is not semantic proof. After code/task content stabilizes, rerun readiness when project Context changed, then regenerate/verify Scope and Context before final verification planning.
 
+When risk requires Builder self-review, prepare its Runtime-owned phase transition before the final Context, Gap Registry, browser proof, and Evidence pass:
+
+```bash
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" <TASK_ID> --prepare
+```
+
+This creates `self-review-packet.md` and moves an active task to `testing`; it does not create a review PASS. Rerun the final readiness/Scope/Context verification after this state transition.
+
 ## 12. Finalize the Verification Gap Registry
 
 Before recording machine Evidence, inspect verification dimensions that canonical `check/typecheck/test` do not automatically prove, such as browser interaction, visual layout, runtime integration, accessibility, performance behavior, or architecture boundaries when relevant to the Task.
@@ -236,8 +244,16 @@ The Gap Registry does not create a second PASS. Canonical machine coverage consu
 When risk requires Builder self-review:
 
 ```bash
-ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" <TASK_ID>
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" <TASK_ID> --prepare
 ```
+
+The second prepare is idempotent and refreshes the packet to the final post-Evidence snapshot without changing task state. Answer every packet question in consumer `docs/wip/<TASK_ID>/self-review.json`, copy its exact repository snapshot, then verify:
+
+```bash
+ACLH_PROJECT_ROOT="$PROJECT_ROOT" node "$ACLH_RUNTIME_ROOT/.harness/scripts/self-review.ts" <TASK_ID> --verify
+```
+
+`self-review.json` is excluded from machine Evidence freshness, but its own repository binding becomes stale after any governed consumer change.
 
 For L2/L3 prepare Independent Review:
 

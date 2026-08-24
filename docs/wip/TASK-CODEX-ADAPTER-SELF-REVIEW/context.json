@@ -1,0 +1,264 @@
+{
+  "version": "2.0",
+  "task_id": "TASK-CODEX-ADAPTER-SELF-REVIEW",
+  "mode": "skill-aware",
+  "generated_at": "2026-08-24T04:17:30.602Z",
+  "basis": {
+    "base_commit": "a9454f0af02671de5f4816ea966ee125e717935f",
+    "sha256": "0029cbeb26ad95ca9c85cc246f5d5656ebd37f6505772043e6085195a52eed72",
+    "changed_files": [
+      ".agents/skills/aclh-task/SKILL.md",
+      ".agents/skills/aclh-task/references/lifecycle.md",
+      ".harness/integrations/codex/aclh-task/references/lifecycle.md",
+      ".harness/project/architecture.yaml",
+      ".harness/project/bug-ledger.yaml",
+      ".harness/scripts/delivery-gate.ts",
+      ".harness/scripts/lib/evidence-runtime.ts",
+      ".harness/scripts/resync.ts",
+      ".harness/scripts/self-review.ts",
+      "AGENTS.md",
+      "docs/wip/.state-template.yaml",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/.state.yaml",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/change-impact-analysis.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/changelog.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/compatibility-verification.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/regression-verification.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/root-cause-analysis.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/self-review-packet.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/spec.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/tasks.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/test-plan.md",
+      "package.json",
+      "tests/codex-adapter.test.ts",
+      "tests/p4-external-delivery.test.ts",
+      "tests/p4-external-self-review.test.ts"
+    ],
+    "change_content_sha256": "4041fa737a5ff8fd24f14737cfdac809743f71f4c755f977131a23ed36c1817a",
+    "skill_plan_sha256": "c31be3e38a1b528cc2b14dba4f8feaa78a84c6ff179e52de000c0bfde86c631a",
+    "context_contract_sha256": "397d8d2c5f66f9d94939babe85453cbc101c209c9b07b42ee5e970c95db80d59",
+    "retrieval_policy_sha256": "83073c8d9a2f3d8dbdb0fba63f37172b7dec5fcfbddaf8ee582916510e605cc9",
+    "explicit_scope": {
+      "modules": [
+        "Governance Runtime",
+        "Codex Adapter"
+      ],
+      "tags": [
+        "self-review",
+        "evidence-freshness",
+        "external-consumer"
+      ],
+      "files": [
+        ".harness/project/architecture.yaml",
+        ".harness/scripts/self-review.ts",
+        ".harness/scripts/delivery-gate.ts",
+        ".agents/skills/aclh-task/references/lifecycle.md",
+        ".harness/integrations/codex/aclh-task/references/lifecycle.md",
+        "tests/p4-external-self-review.test.ts",
+        "tests/p4-external-delivery.test.ts"
+      ]
+    }
+  },
+  "skills": [
+    "change-impact-analysis",
+    "compatibility-verification",
+    "regression-verification",
+    "root-cause-analysis"
+  ],
+  "requirements": {
+    "architecture": {
+      "level": "required",
+      "required_by": [
+        "change-impact-analysis",
+        "compatibility-verification"
+      ],
+      "optional_by": [
+        "root-cause-analysis"
+      ],
+      "resolver": "project-file",
+      "source": "architecture.yaml"
+    },
+    "bug-ledger": {
+      "level": "required",
+      "required_by": [
+        "root-cause-analysis"
+      ],
+      "optional_by": [
+        "change-impact-analysis",
+        "regression-verification"
+      ],
+      "resolver": "knowledge",
+      "source": "bug-ledger.yaml"
+    },
+    "changed-files": {
+      "level": "required",
+      "required_by": [
+        "change-impact-analysis",
+        "regression-verification",
+        "root-cause-analysis"
+      ],
+      "optional_by": [
+        "compatibility-verification"
+      ],
+      "resolver": "changed-files"
+    },
+    "decisions": {
+      "level": "required",
+      "required_by": [
+        "compatibility-verification"
+      ],
+      "optional_by": [
+        "change-impact-analysis"
+      ],
+      "resolver": "knowledge",
+      "source": "decisions.yaml"
+    },
+    "gotchas": {
+      "level": "optional",
+      "required_by": [],
+      "optional_by": [
+        "compatibility-verification",
+        "regression-verification",
+        "root-cause-analysis"
+      ],
+      "resolver": "knowledge",
+      "source": "gotchas.yaml"
+    }
+  },
+  "retrieval": {
+    "max_items_per_source": 5,
+    "scoring": {
+      "minimum_scope_matches": 1,
+      "module_match": 5,
+      "file_match": 4,
+      "tag_match": 3,
+      "high_severity_bonus": 2
+    },
+    "selected_knowledge_items": 1,
+    "total_knowledge_matches": 1
+  },
+  "selected": {
+    "architecture": {
+      "source": ".harness/project/architecture.yaml",
+      "modules": [
+        {
+          "name": "Governance Runtime",
+          "path": ".harness/scripts",
+          "responsibility": "Own task state transitions, Context, Evidence, review, and delivery validation.",
+          "depends_on": []
+        },
+        {
+          "name": "Codex Adapter",
+          "path": ".agents/skills/aclh-task",
+          "responsibility": "Orchestrate the repository-owned ACLH lifecycle for explicit Codex invocation.",
+          "depends_on": [
+            "Governance Runtime"
+          ]
+        },
+        {
+          "name": "External Codex Integration",
+          "path": ".harness/integrations/codex",
+          "responsibility": "Provide the thin Codex integration copied into an external consumer repository.",
+          "depends_on": [
+            "Governance Runtime"
+          ]
+        },
+        {
+          "name": "Runtime Verification",
+          "path": "tests",
+          "responsibility": "Verify embedded and external ACLH lifecycle contracts and trust boundaries.",
+          "depends_on": [
+            "Governance Runtime",
+            "Codex Adapter",
+            "External Codex Integration"
+          ]
+        }
+      ]
+    },
+    "bug-ledger": {
+      "source": ".harness/project/bug-ledger.yaml",
+      "items": [
+        {
+          "score": 14,
+          "reasons": [
+            "module",
+            "tag",
+            "file",
+            "severity"
+          ],
+          "entry": {
+            "id": "BUG-SELF-REVIEW-FRESHNESS",
+            "date": "2026-08-24",
+            "source": "human_review",
+            "task": "TASK-CODEX-ADAPTER-SELF-REVIEW",
+            "module": "Governance Runtime",
+            "modules": [
+              "Governance Runtime",
+              "Codex Adapter",
+              "External Codex Integration"
+            ],
+            "tags": [
+              "self-review",
+              "evidence-freshness",
+              "external-consumer"
+            ],
+            "severity": "high",
+            "symptom": "L1-L3 Adapter tasks could not populate self-review without staling Evidence, and old inline reviews were reusable after repository changes.",
+            "root_cause": "Builder self-review was mutable inline task state without a Runtime transition or repository snapshot binding.",
+            "resolution": "Prepare task phase before final verification and verify a separate snapshot-bound self-review.json after Evidence.",
+            "prevention_rule": "Semantic review outputs must have explicit freshness binding and must not mutate the machine-Evidence subject after gates run.",
+            "affected_files": [
+              ".harness/scripts/self-review.ts",
+              ".harness/scripts/lib/evidence-runtime.ts",
+              ".harness/scripts/delivery-gate.ts",
+              ".agents/skills/aclh-task/references/lifecycle.md",
+              ".harness/integrations/codex/aclh-task/references/lifecycle.md"
+            ],
+            "test_added": "External self-review snapshot freshness and complete L2 delivery regression",
+            "lesson": "Review structure is not review freshness; bind semantic review to the governed repository snapshot.",
+            "review_round": 1
+          }
+        }
+      ],
+      "total_matches": 1
+    },
+    "changed-files": {
+      "files": [
+        ".agents/skills/aclh-task/SKILL.md",
+        ".agents/skills/aclh-task/references/lifecycle.md",
+        ".harness/integrations/codex/aclh-task/references/lifecycle.md",
+        ".harness/project/architecture.yaml",
+        ".harness/project/bug-ledger.yaml",
+        ".harness/scripts/delivery-gate.ts",
+        ".harness/scripts/lib/evidence-runtime.ts",
+        ".harness/scripts/resync.ts",
+        ".harness/scripts/self-review.ts",
+        "AGENTS.md",
+        "docs/wip/.state-template.yaml",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/.state.yaml",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/change-impact-analysis.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/changelog.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/compatibility-verification.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/regression-verification.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/root-cause-analysis.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/self-review-packet.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/spec.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/tasks.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/test-plan.md",
+        "package.json",
+        "tests/codex-adapter.test.ts",
+        "tests/p4-external-delivery.test.ts",
+        "tests/p4-external-self-review.test.ts"
+      ]
+    },
+    "decisions": {
+      "source": ".harness/project/decisions.yaml",
+      "items": [],
+      "total_matches": 0
+    },
+    "gotchas": {
+      "source": ".harness/project/gotchas.yaml",
+      "items": [],
+      "total_matches": 0
+    }
+  }
+}

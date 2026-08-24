@@ -78,7 +78,7 @@ export function sameSnapshot(a:RepositorySnapshot,b:RepositorySnapshot):boolean 
 }
 
 export function evidenceExclusions(root:string,taskDir:string):string[] {
-  return ['evidence.json','review-packet.md','independent-review.json','managed-snapshot.json']
+  return ['evidence.json','self-review-packet.md','self-review.json','review-packet.md','independent-review.json','managed-snapshot.json']
     .map(name=>normalizeRepoPath(path.relative(root,path.join(taskDir,name))));
 }
 

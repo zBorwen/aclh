@@ -1,0 +1,14 @@
+version: "1.0"
+task_id: TASK-CODEX-ADAPTER-SELF-REVIEW
+classification:
+  ref: classification.yaml
+selected:
+  - change-impact-analysis
+  - compatibility-verification
+  - regression-verification
+  - root-cause-analysis
+resolved:
+  - change-impact-analysis
+  - compatibility-verification
+  - regression-verification
+  - root-cause-analysis

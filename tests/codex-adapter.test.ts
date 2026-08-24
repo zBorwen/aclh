@@ -59,7 +59,8 @@ test('Codex adapter lifecycle delegates every trusted transition to ACLH Runtime
     'skill-output.ts <TASK_ID> --verify',
     'npm run evidence -- <TASK_ID> --verify',
     'skill-evidence.ts <TASK_ID> --verify',
-    'self-review.ts <TASK_ID>',
+    'self-review.ts <TASK_ID> --prepare',
+    'self-review.ts <TASK_ID> --verify',
     'independent-review.ts <TASK_ID> --prepare',
     'delivery-gate.ts <TASK_ID>',
   ];
@@ -71,4 +72,6 @@ test('Codex adapter lifecycle delegates every trusted transition to ACLH Runtime
   assert.match(lifecycle, /Do not write `resolved` manually/);
   assert.match(lifecycle, /must not create an independent PASS/i);
   assert.match(lifecycle, /regenerate and verify Context/i);
+  assert.match(lifecycle, /self-review\.json/);
+  assert.match(lifecycle, /post-Evidence repository snapshot/i);
 });

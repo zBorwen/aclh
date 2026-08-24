@@ -7,7 +7,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "node --test tests/*.test.ts",
+    "test": "node --test --test-concurrency=1 tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "node .harness/scripts/check.ts",
     "evidence": "node .harness/scripts/evidence.ts"

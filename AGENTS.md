@@ -133,10 +133,12 @@ A repository change invalidates old Evidence. Verification Skills map through `.
 Required for L1-L3, not L0:
 
 ```bash
-node .harness/scripts/self-review.ts <TASK_ID>
+node .harness/scripts/self-review.ts <TASK_ID> --prepare
+# After final machine Evidence, record self-review.json from the refreshed packet.
+node .harness/scripts/self-review.ts <TASK_ID> --verify
 ```
 
-This is a hostile Builder self-check, not independent review evidence.
+Prepare transitions the active task before final Context/Evidence. The verified `self-review.json` is snapshot-bound hostile Builder review, not independent review evidence.
 
 ### A10. Independent review
 - L0/L1: not required by risk policy.

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { stringify as stringifyYaml } from 'yaml';
 
 const ENGINE_ROOT = process.cwd();
 
@@ -98,19 +98,8 @@ test('external L2 consumer passes the complete P3 delivery chain without embedde
       '# Evidence', '- Canonical consumer-bound Evidence is required.', '',
     ].join('\n'));
 
-    const statePath = path.join(taskDir, '.state.yaml');
-    const state = parseYaml(fs.readFileSync(statePath, 'utf8')) as Record<string, unknown>;
-    state.phase = 'testing';
-    state.status = 'active';
-    state.review_history = [];
-    state.self_review = {
-      run_at: new Date().toISOString(),
-      gaps_found: [],
-      root_fix_tracked: 'Engine remains outside consumer while governance state remains inside',
-      notes: 'external L2 fixture reviewed before final Evidence',
-      answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `verified ${index + 1}`])),
-    };
-    fs.writeFileSync(statePath, stringifyYaml(state));
+    const prepareSelfReview = run(projectRoot, 'self-review.ts', [taskId, '--prepare']);
+    assert.equal(prepareSelfReview.status, 0, prepareSelfReview.stderr || prepareSelfReview.stdout);
 
     const scope = run(projectRoot, 'context-scope.ts', [taskId, '--generate']);
     assert.equal(scope.status, 0, scope.stderr || scope.stdout);
@@ -150,6 +139,22 @@ test('external L2 consumer passes the complete P3 delivery chain without embedde
     }
     const gapVerify = run(projectRoot, 'verification-gaps.ts', [taskId, '--verify']);
     assert.equal(gapVerify.status, 0, gapVerify.stderr || gapVerify.stdout);
+
+    const refreshSelfReviewPacket = run(projectRoot, 'self-review.ts', [taskId, '--prepare']);
+    assert.equal(refreshSelfReviewPacket.status, 0, refreshSelfReviewPacket.stderr || refreshSelfReviewPacket.stdout);
+    const selfReviewPacket = fs.readFileSync(path.join(taskDir, 'self-review-packet.md'), 'utf8');
+    fs.writeFileSync(path.join(taskDir, 'self-review.json'), `${JSON.stringify({
+      version: '1.0',
+      task_id: taskId,
+      repository: packetSnapshot(selfReviewPacket),
+      run_at: new Date().toISOString(),
+      gaps_found: [],
+      root_fix_tracked: 'Engine remains outside consumer while governance state remains inside',
+      notes: 'external L2 fixture reviewed after final machine verification',
+      answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `verified ${index + 1}`])),
+    }, null, 2)}\n`);
+    const selfReview = run(projectRoot, 'self-review.ts', [taskId, '--verify']);
+    assert.equal(selfReview.status, 0, selfReview.stderr || selfReview.stdout);
 
     const prepare = run(projectRoot, 'independent-review.ts', [taskId, '--prepare']);
     assert.equal(prepare.status, 0, prepare.stderr || prepare.stdout);

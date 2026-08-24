@@ -87,7 +87,7 @@ if (hasSkillPlan) {
 }
 
 if (policy.builder_self_review === true) {
-  run('self-review.ts', [taskId]);
+  run('self-review.ts', [taskId, '--verify']);
 } else {
   console.log(`[Delivery] ${taskId}: builder self-review not required by risk ${risk}`);
 }

@@ -34,9 +34,9 @@ Follow `references/lifecycle.md` in order. In summary:
 7. Generate Skill-aware Context.
 8. Present a concise bootstrap summary, then continue implementation without requiring routine confirmation.
 9. Complete implementation, verification-plan markers, and resolved Skill output artifacts.
-10. Regenerate Skill-aware Context after governed content stabilizes.
+10. Prepare required self-review state, then regenerate Skill-aware Context after governed content stabilizes.
 11. Record only the canonical machine Evidence required by risk plus selected verification Skills.
-12. Run required self-review and delivery checks.
+12. Record and verify the snapshot-bound Builder self-review, then run delivery checks.
 13. For L2/L3, prepare Independent Review and stop at the independent-review boundary unless a genuinely separate reviewer context/human has supplied the review artifact.
 
 ## User-visible progress

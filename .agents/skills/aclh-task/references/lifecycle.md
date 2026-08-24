@@ -147,6 +147,14 @@ node .harness/scripts/skill-output.ts <TASK_ID> --verify
 
 Structural Skill output completion is not semantic proof.
 
+When risk requires Builder self-review, prepare the Runtime-owned phase transition before final Context and Evidence:
+
+```bash
+node .harness/scripts/self-review.ts <TASK_ID> --prepare
+```
+
+This creates `self-review-packet.md` and moves an active task to `testing`. It does not create a PASS or answer the hostile review questions.
+
 ## 9. Refresh Context after governed content stabilizes
 
 Implementation changes can invalidate P3 Context freshness. After code and task artifacts are stable, regenerate and verify Context:
@@ -188,8 +196,16 @@ Follow risk policy in `.harness/governance.yaml` / `AGENTS.md`.
 When Builder self-review is required:
 
 ```bash
-node .harness/scripts/self-review.ts <TASK_ID>
+node .harness/scripts/self-review.ts <TASK_ID> --prepare
 ```
+
+The second prepare is idempotent: it refreshes the packet to the final post-Evidence repository snapshot without mutating task state. Answer every packet question in `self-review.json`, copy the packet's exact repository snapshot, and then verify:
+
+```bash
+node .harness/scripts/self-review.ts <TASK_ID> --verify
+```
+
+`self-review.json` is a semantic review output excluded from machine Evidence freshness, but its own snapshot becomes stale after any governed repository change.
 
 For L2/L3, prepare Independent Review:
 

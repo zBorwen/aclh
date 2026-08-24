@@ -1,0 +1,35 @@
+task_id: TASK-CODEX-ADAPTER-SELF-REVIEW
+risk_level: L2
+verification_strategy: tdd
+classification:
+  file: classification.yaml
+skill_plan:
+  file: skill-plan.yaml
+identity:
+  branch: agent/codex-adapter-self-review
+  base_commit: a9454f0af02671de5f4816ea966ee125e717935f
+  pr_number: null
+context_scope:
+  modules:
+    - Governance Runtime
+    - Codex Adapter
+  tags:
+    - self-review
+    - evidence-freshness
+    - external-consumer
+  files:
+    - .harness/project/architecture.yaml
+    - .harness/scripts/self-review.ts
+    - .harness/scripts/delivery-gate.ts
+    - .agents/skills/aclh-task/references/lifecycle.md
+    - .harness/integrations/codex/aclh-task/references/lifecycle.md
+    - tests/p4-external-self-review.test.ts
+    - tests/p4-external-delivery.test.ts
+created_at: 2026-08-24T03:56:56.115Z
+updated_at: 2026-08-24T04:17:30.435Z
+phase: testing
+status: active
+review_history: []
+self_review:
+  packet: self-review-packet.md
+  record: self-review.json

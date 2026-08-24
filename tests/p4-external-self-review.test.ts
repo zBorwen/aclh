@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { parse as parseYaml } from 'yaml';
 
 const ENGINE_ROOT = process.cwd();
 
@@ -25,12 +25,28 @@ function createConsumer(): string {
   git(root, ['config', 'user.email', 'aclh-test@example.com']);
   git(root, ['config', 'user.name', 'ACLH Test']);
   fs.writeFileSync(path.join(root, 'README.md'), '# consumer\n');
+  fs.writeFileSync(path.join(root, 'package.json'), `${JSON.stringify({
+    name: 'external-self-review-consumer',
+    private: true,
+    scripts: {
+      typecheck: 'node -e "process.exit(0)"',
+      test: 'node -e "process.exit(0)"',
+    },
+  }, null, 2)}\n`);
   git(root, ['add', '.']);
   git(root, ['commit', '-m', 'initial consumer']);
   return root;
 }
 
-test('Builder self-review reads task artifacts from consumer and AGENTS contract from Engine', () => {
+function packetSnapshot(packet: string): { commit_sha: string; worktree_sha256: string } {
+  const commit = packet.match(/^- commit: ([0-9a-f]{40})$/m)?.[1];
+  const worktree = packet.match(/^- worktree: ([0-9a-f]{64})$/m)?.[1];
+  assert.ok(commit);
+  assert.ok(worktree);
+  return { commit_sha: commit, worktree_sha256: worktree };
+}
+
+test('Builder self-review is prepared before Evidence, snapshot-bound, and recorded outside task state', () => {
   const projectRoot = createConsumer();
   const taskId = 'TASK-EXTERNAL-SELF-REVIEW';
   try {
@@ -42,25 +58,42 @@ test('Builder self-review reads task artifacts from consumer and AGENTS contract
     fs.writeFileSync(path.join(taskDir, 'test-plan.md'), '# Test Plan\n\n- [x] test complete\n');
     fs.writeFileSync(path.join(taskDir, 'changelog.md'), '# Changelog\n\n- external self-review prepared\n');
 
-    const statePath = path.join(taskDir, '.state.yaml');
-    const state = parseYaml(fs.readFileSync(statePath, 'utf8')) as Record<string, unknown>;
-    state.phase = 'testing';
-    state.status = 'active';
-    state.review_history = [];
-    state.self_review = {
+    const prepare = run(projectRoot, 'self-review.ts', [taskId, '--prepare']);
+    assert.equal(prepare.status, 0, prepare.stderr || prepare.stdout);
+    const state = parseYaml(fs.readFileSync(path.join(taskDir, '.state.yaml'), 'utf8')) as { phase?: unknown };
+    assert.equal(state.phase, 'testing');
+
+    for (const gate of ['check', 'typecheck', 'test']) {
+      const evidence = run(projectRoot, 'evidence.ts', [taskId, '--gate', gate]);
+      assert.equal(evidence.status, 0, `${gate}: ${evidence.stderr || evidence.stdout}`);
+    }
+
+    const packet = fs.readFileSync(path.join(taskDir, 'self-review-packet.md'), 'utf8');
+    const review = {
+      version: '1.0',
+      task_id: taskId,
+      repository: packetSnapshot(packet),
       run_at: new Date().toISOString(),
       gaps_found: [],
       root_fix_tracked: 'external consumer ownership remains intact',
       notes: 'reviewed consumer task artifacts against Engine contract',
       answers: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`Q${index + 1}`, `answer ${index + 1}`])),
     };
-    fs.writeFileSync(statePath, stringifyYaml(state));
+    fs.writeFileSync(path.join(taskDir, 'self-review.json'), `${JSON.stringify(review, null, 2)}\n`);
 
     assert.equal(fs.existsSync(path.join(projectRoot, 'AGENTS.md')), false);
-    const review = run(projectRoot, 'self-review.ts', [taskId]);
-    assert.equal(review.status, 0, review.stderr || review.stdout);
-    assert.match(review.stdout, /\[PASS\] Adversarial Self-Review/);
-    assert.match(review.stdout, /contract:agents\.md.*present in ACLH Engine/);
+    const verify = run(projectRoot, 'self-review.ts', [taskId, '--verify']);
+    assert.equal(verify.status, 0, verify.stderr || verify.stdout);
+    assert.match(verify.stdout, /\[PASS\] Adversarial Self-Review/);
+    assert.match(verify.stdout, /contract:agents\.md.*present in ACLH Engine/);
+
+    const evidenceVerify = run(projectRoot, 'evidence.ts', [taskId, '--verify']);
+    assert.equal(evidenceVerify.status, 0, evidenceVerify.stderr || evidenceVerify.stdout);
+
+    fs.writeFileSync(path.join(projectRoot, 'README.md'), '# changed after self-review\n');
+    const stale = run(projectRoot, 'self-review.ts', [taskId, '--verify']);
+    assert.notEqual(stale.status, 0);
+    assert.match(stale.stderr + stale.stdout, /self-review is stale for the current repository snapshot/);
   } finally {
     fs.rmSync(projectRoot, { recursive: true, force: true });
   }

@@ -92,7 +92,6 @@ try {
 
   const state = parseYaml(fs.readFileSync(statePath, 'utf8')) as {
     identity?: { base_commit?: unknown };
-    self_review?: { run_at?: unknown };
   };
   const baseCommit = typeof state.identity?.base_commit === 'string' ? state.identity.base_commit : '';
   if (!/^[0-9a-f]{40}$/.test(baseCommit)) throw new Error('task identity.base_commit is missing or invalid');
@@ -130,7 +129,7 @@ try {
       context_scope_refresh: fs.existsSync(path.join(taskDir, 'context-scope.json')),
       context_refresh: fs.existsSync(path.join(taskDir, 'context.json')),
       evidence_refresh: evidenceHasGates(),
-      self_review_refresh: typeof state.self_review?.run_at === 'string' && state.self_review.run_at.trim().length > 0,
+      self_review_refresh: fs.existsSync(path.join(taskDir, 'self-review.json')),
       independent_review_refresh: fs.existsSync(path.join(taskDir, 'independent-review.json')),
     },
   };

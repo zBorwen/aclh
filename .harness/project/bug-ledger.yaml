@@ -18,4 +18,24 @@ entries:
   #   test_added: "不完整 API 响应回归测试"
   #   lesson: "不要假设外部 API 永远满足约定"
   #   review_round: 1
-  []
+  - id: "BUG-SELF-REVIEW-FRESHNESS"
+    date: "2026-08-24"
+    source: "human_review"
+    task: "TASK-CODEX-ADAPTER-SELF-REVIEW"
+    module: "Governance Runtime"
+    modules: ["Governance Runtime", "Codex Adapter", "External Codex Integration"]
+    tags: ["self-review", "evidence-freshness", "external-consumer"]
+    severity: "high"
+    symptom: "L1-L3 Adapter tasks could not populate self-review without staling Evidence, and old inline reviews were reusable after repository changes."
+    root_cause: "Builder self-review was mutable inline task state without a Runtime transition or repository snapshot binding."
+    resolution: "Prepare task phase before final verification and verify a separate snapshot-bound self-review.json after Evidence."
+    prevention_rule: "Semantic review outputs must have explicit freshness binding and must not mutate the machine-Evidence subject after gates run."
+    affected_files:
+      - ".harness/scripts/self-review.ts"
+      - ".harness/scripts/lib/evidence-runtime.ts"
+      - ".harness/scripts/delivery-gate.ts"
+      - ".agents/skills/aclh-task/references/lifecycle.md"
+      - ".harness/integrations/codex/aclh-task/references/lifecycle.md"
+    test_added: "External self-review snapshot freshness and complete L2 delivery regression"
+    lesson: "Review structure is not review freshness; bind semantic review to the governed repository snapshot."
+    review_round: 1
