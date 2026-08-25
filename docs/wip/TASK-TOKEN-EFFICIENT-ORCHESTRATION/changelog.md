@@ -6,3 +6,4 @@
 - 2026-08-25: Reduced Codex Adapter lifecycle text and directed continuations through bounded machine status.
 - 2026-08-25: Split experiment reporting into observed, valid workflow, orchestration waste and aborted/setup totals with compatibility for old records.
 - 2026-08-25: Canonical check/typecheck and the expanded 104-test repository suite pass; experiment controller suite passes 5/5.
+- 2026-08-25: Applied the compact contract/status flow to the actual external Codex integration used by consumer experiments, reducing its installed Adapter text from 15.6KB to 7.9KB.

@@ -52,8 +52,14 @@ test('Codex integration attaches as a thin full-lifecycle Skill and detaches wit
     const lifecyclePath = path.join(projectRoot, '.agents/skills/aclh-task/references/lifecycle.md');
     assert.equal(fs.existsSync(skillPath), true);
     assert.equal(fs.existsSync(lifecyclePath), true);
-    assert.match(fs.readFileSync(skillPath, 'utf8'), /thin consumer integration/);
-    assert.match(fs.readFileSync(lifecyclePath, 'utf8'), /delivery-gate\.ts/);
+    const skill = fs.readFileSync(skillPath, 'utf8');
+    const lifecycle = fs.readFileSync(lifecyclePath, 'utf8');
+    assert.match(skill, /thin consumer integration/);
+    assert.match(skill, /task-contract\.ts/);
+    assert.match(skill, /task-status\.ts/);
+    assert.match(lifecycle, /delivery-gate\.ts/);
+    assert.match(lifecycle, /task-status\.ts.*--review-ready.*--json/s);
+    assert.ok(skill.length + lifecycle.length < 11_000, 'external Adapter contract must remain bounded');
     assert.equal(fs.existsSync(path.join(projectRoot, '.harness')), false, 'Runtime implementation must stay outside the consumer repo');
 
     const status = run('status', projectRoot);
