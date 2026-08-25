@@ -69,6 +69,9 @@ test('Builder self-review is prepared before Evidence, snapshot-bound, and recor
     }
 
     const packet = fs.readFileSync(path.join(taskDir, 'self-review-packet.md'), 'utf8');
+    assert.match(packet, /Artifact sources/);
+    assert.match(packet, /docs\/wip\/TASK-EXTERNAL-SELF-REVIEW\/spec\.md/);
+    assert.doesNotMatch(packet, /acceptance verified/);
     const review = {
       version: '1.0',
       task_id: taskId,

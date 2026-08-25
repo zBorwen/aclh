@@ -30,6 +30,9 @@ test('Codex adapter uses the repository-local aclh-task Skill contract', () => {
   assert.match(content, /must not mechanically map to a fixed Skill set/i);
   assert.match(content, /Never create a same-session independent PASS/i);
   assert.match(content, /references\/lifecycle\.md/);
+  assert.match(content, /task-status\.ts/);
+  assert.match(content, /task-contract\.ts/);
+  assert.match(content, /do not inspect Runtime source/i);
 });
 
 test('Codex adapter requires explicit invocation', () => {
@@ -62,6 +65,7 @@ test('Codex adapter lifecycle delegates every trusted transition to ACLH Runtime
     'self-review.ts <TASK_ID> --prepare',
     'self-review.ts <TASK_ID> --verify',
     'independent-review.ts <TASK_ID> --prepare',
+    'task-status.ts <TASK_ID> --review-ready --json',
     'delivery-gate.ts <TASK_ID>',
   ];
 
@@ -74,4 +78,5 @@ test('Codex adapter lifecycle delegates every trusted transition to ACLH Runtime
   assert.match(lifecycle, /regenerate and verify Context/i);
   assert.match(lifecycle, /self-review\.json/);
   assert.match(lifecycle, /post-Evidence repository snapshot/i);
+  assert.match(lifecycle, /Reviewer may write only `independent-review\.json`/i);
 });

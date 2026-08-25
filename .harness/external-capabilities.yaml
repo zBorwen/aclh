@@ -22,3 +22,5 @@ external_mode:
     managed-snapshot: supported
     resync: supported
     skill-replan: supported
+    task-contract: supported
+    task-status: supported

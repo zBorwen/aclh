@@ -13,8 +13,8 @@ Treat the text following `$aclh-task` as the engineering task intent. The user m
 
 ## Operating rules
 
-1. Read repository `AGENTS.md`, `.harness/governance.yaml`, and `.harness/SKILLS.md` before mutating the repository.
-2. Use `.harness/scripts/*` as the source of executable truth. If this Skill conflicts with executable Harness behavior, report the mismatch and follow the stricter repository contract.
+1. Follow `PROJECT_ROOT/AGENTS.md` when present. An embedded Engine repository may require its local governance files. For a thin external consumer, do not substitute Engine `AGENTS.md` for a missing project file; load bounded bootstrap choices with `task-contract.ts --json`.
+2. Use `.harness/scripts/*` as executable truth. After task initialization, run `task-status.ts <TASK_ID> --json` to identify the next action; do not inspect Runtime source to reconstruct state unless a reported Runtime defect itself is under investigation.
 3. Do not ask the user to choose `risk`, `verification_strategy`, Classification, or Engineering Skills during routine bootstrap. Assess them from the request and repository context, record the rationale, and proceed.
 4. Classification describes the task; it must not mechanically map to a fixed Skill set. Author `selected` Skills explicitly from the available `.harness/skills/*.yaml` catalog and never invent missing Skills.
 5. Keep implementation ownership with the Builder. ACLH Engineering Skills structure understanding and verification; they are not Codex-native subagents.
@@ -23,21 +23,23 @@ Treat the text following `$aclh-task` as the engineering task intent. The user m
 
 ## Run the lifecycle
 
-Follow `references/lifecycle.md` in order. In summary:
+Follow `references/lifecycle.md`. Bootstrap once, then use compact Runtime status
+instead of rereading every contract:
 
-1. Understand the task before bootstrap and derive a short task ID when none was supplied.
-2. Ensure a safe task branch/worktree state.
-3. Assess Classification, risk level, and the current P2 compatibility verification strategy.
-4. Run `init-task.ts` with the assessed risk and strategy.
-5. Persist and verify `classification.yaml`.
-6. Explicitly author `skill-plan.yaml`; resolve and verify it with the Runtime.
-7. Generate Skill-aware Context.
-8. Present a concise bootstrap summary, then continue implementation without requiring routine confirmation.
-9. Complete implementation, verification-plan markers, and resolved Skill output artifacts.
-10. Prepare required self-review state, then regenerate Skill-aware Context after governed content stabilizes.
-11. Record only the canonical machine Evidence required by risk plus selected verification Skills.
-12. Record and verify the snapshot-bound Builder self-review, then run delivery checks.
-13. For L2/L3, prepare Independent Review and stop at the independent-review boundary unless a genuinely separate reviewer context/human has supplied the review artifact.
+```bash
+node .harness/scripts/task-contract.ts --json
+node .harness/scripts/task-status.ts <TASK_ID> --json
+```
+
+Before dispatching L2/L3 Independent Review, require:
+
+```bash
+node .harness/scripts/task-status.ts <TASK_ID> --review-ready --json
+```
+
+Only an exit-zero `review_ready: true` permits reviewer dispatch. The reviewer may
+write only `independent-review.json`; stale Builder prerequisites return to the
+Builder.
 
 ## User-visible progress
 

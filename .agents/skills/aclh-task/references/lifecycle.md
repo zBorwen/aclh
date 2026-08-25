@@ -1,236 +1,137 @@
 # ACLH Task Adapter Lifecycle
 
-This reference defines orchestration only. Repository Runtime scripts remain authoritative for validation and persistence.
+Runtime scripts are authoritative. Use this reference for semantic decisions and
+role boundaries; use `task-status.ts` for current machine state. Do not inspect
+Runtime source merely to infer the next lifecycle command.
 
-## 1. Understand the request before initialization
+## 1. Bootstrap
 
-Extract the irreducible goal, observable behavior, affected boundaries, and material ambiguities from the user's natural-language request.
+Understand the goal, observable behavior, boundaries and material ambiguities.
+Reuse a supplied task ID or derive a unique `TASK-...` ID.
 
-If the user supplied a valid ACLH task ID, reuse it. Otherwise derive a concise uppercase kebab ID beginning with `TASK-`, for example `TASK-GOOGLE-AUTH-LOGIN`. Before using it, check `docs/wip/`; if the ID already exists, append the smallest numeric suffix that makes it unique.
+Before mutation, inspect Git status, branch and HEAD. New tasks require a clean,
+dedicated `agent/<task-slug>` branch. A continuation may reuse a branch only when
+the existing `.state.yaml` binds that task to it. Never discard unrelated changes.
 
-Do not create task files yet.
+Assess from the request and repository:
 
-## 2. Establish safe Git identity
+- Classification primary/traits/confidence/rationale;
+- risk `L0|L1|L2|L3` from blast radius;
+- one P2 compatibility strategy;
+- the minimal explicit Engineering Skills actually needed.
 
-Run `git status --short`, resolve the current branch, and inspect HEAD.
-
-- Never initialize an ACLH task from detached HEAD.
-- `$aclh-task` is a new-task entry point. For a new task, always create and switch to a dedicated `agent/<task-slug>` branch before `init-task.ts`, even when the Skill itself is being tested from another feature/adapter branch. The new task branch starts from the current HEAD so the repo-local Adapter remains available during branch testing.
-- Reuse the current branch only when the request explicitly continues an existing ACLH task and `docs/wip/<TASK_ID>/.state.yaml` already binds that task to the current branch.
-- If the target branch name already exists, append the smallest numeric suffix that makes it unique; do not silently attach a new task to an unrelated existing branch.
-- If unrelated dirty changes would contaminate the task snapshot, stop before branch/task mutation and report the conflicting paths. Do not discard or hide user changes.
-
-The dedicated branch must be stable before task initialization because ACLH binds task identity to branch + base commit.
-
-## 3. Assess bootstrap metadata
-
-Make a task-specific judgment; do not use a Classification-to-Skill lookup table.
-
-### Classification
-
-Use the repository Classification v1 contract:
-
-- primary: `feature | bug | refactor | migration | integration`
-- traits: only values accepted by the Classification Runtime
-- confidence: `high | medium | low`
-- source: `codex`
-
-Record concise rationale and concrete ambiguities. Prefer `integration` as primary only when the dominant engineering purpose is crossing a system/provider boundary; a UI that happens to call an existing local API is not automatically an integration task.
-
-### Risk
-
-Use `.harness/governance.yaml` as the source of allowed levels. Assess delivery risk from scope and blast radius rather than task size alone.
-
-Typical interpretation:
-
-- `L0`: trivial/mechanical, negligible behavioral risk
-- `L1`: low-risk local change
-- `L2`: normal business development/default
-- `L3`: high-risk or sensitive cross-boundary work where stronger human review is warranted
-
-Authentication, authorization, sensitive persistence, schema/data migration, or critical cross-system changes are strong L3 signals, but still inspect the actual repository before deciding.
-
-### P2 compatibility verification strategy
-
-Choose exactly one currently supported strategy from `.harness/governance.yaml` as the dominant compatibility path:
-
-- `tdd`: behavioral logic/defect flow where RED-GREEN-REFACTOR is meaningful
-- `component`: UI component interaction/rendering flow
-- `config`: configuration/schema/smoke flow
-- `migration`: compatibility/rollback flow
-- `docs`: documentation structure/example flow
-
-For mixed tasks, choose the dominant existing P2 strategy; use P3 verification Skills for additional machine-evidence requirements. Do not pretend this single strategy describes the entire task.
-
-## 4. Initialize the task workspace
-
-Run:
+Classification must not mechanically select Skills. In an external consumer, load
+the bounded contract instead of reading Engine governance/source files:
 
 ```bash
-node .harness/scripts/init-task.ts <TASK_ID> --risk <L0|L1|L2|L3> --strategy <strategy>
+node .harness/scripts/task-contract.ts --json
 ```
 
-Do not hand-create `.state.yaml` or `evidence.json`.
-
-## 5. Persist Classification
-
-Create `docs/wip/<TASK_ID>/classification.yaml` using the Runtime's v1 schema, then run:
+Select only relevant Skills from that result. Then initialize and validate:
 
 ```bash
+node .harness/scripts/init-task.ts <TASK_ID> --risk <LEVEL> --strategy <STRATEGY>
 node .harness/scripts/classification.ts <TASK_ID> --verify
-```
-
-If validation fails, fix the artifact; do not weaken the validator.
-
-## 6. Author the explicit Skill Plan
-
-Inspect `.harness/skills/*.yaml`. Select only existing Skills whose capabilities are actually needed.
-
-Create `docs/wip/<TASK_ID>/skill-plan.yaml` with:
-
-```yaml
-version: "1.0"
-task_id: <TASK_ID>
-classification:
-  ref: classification.yaml
-selected:
-  - <explicit-skill-id>
-```
-
-Do not write `resolved` manually. Run:
-
-```bash
 node .harness/scripts/skill-plan.ts <TASK_ID> --resolve
 node .harness/scripts/skill-plan.ts <TASK_ID> --verify
-```
-
-The Runtime owns dependency expansion and canonical ordering.
-
-## 7. Generate Skill-aware Context
-
-Run:
-
-```bash
-node .harness/scripts/context-select.ts <TASK_ID> --generate
-```
-
-Read the generated `context.json` and the selected source material needed for implementation. Do not replace bounded Context with eager loading of the entire knowledge base.
-
-At this point show the user one compact bootstrap summary:
-
-```text
-Task: <TASK_ID>
-Branch: <branch>
-Classification: <primary + important traits>
-Risk / strategy: <risk> / <strategy>
-Skills: <resolved skills>
-Important ambiguity: <only if material>
-```
-
-Then continue unless a material ambiguity makes safe implementation impossible.
-
-## 8. Implement and verify
-
-Implement the smallest safe solution. Maintain `spec.md`, `tasks.md`, `test-plan.md`, and task changelog as required by repository process.
-
-Complete the selected P2 strategy markers and run:
-
-```bash
-node .harness/scripts/verification-plan.ts <TASK_ID>
-```
-
-For every resolved Skill output, inspect `.harness/artifacts/skill-outputs.yaml`, produce the required task-local artifact/sections, then run:
-
-```bash
-node .harness/scripts/skill-output.ts <TASK_ID> --verify
-```
-
-Structural Skill output completion is not semantic proof.
-
-When risk requires Builder self-review, prepare the Runtime-owned phase transition before final Context and Evidence:
-
-```bash
-node .harness/scripts/self-review.ts <TASK_ID> --prepare
-```
-
-This creates `self-review-packet.md` and moves an active task to `testing`. It does not create a PASS or answer the hostile review questions.
-
-## 9. Refresh Context after governed content stabilizes
-
-Implementation changes can invalidate P3 Context freshness. After code and task artifacts are stable, regenerate and verify Context:
-
-```bash
 node .harness/scripts/context-select.ts <TASK_ID> --generate
 node .harness/scripts/context-select.ts <TASK_ID> --verify
 ```
 
-Do this before final Evidence recording.
+Create `classification.yaml` and the explicit `selected` list in
+`skill-plan.yaml`. Do not write `resolved` manually. Runtime owns dependency
+ordering. Show one compact bootstrap summary, then continue unless an ambiguity
+materially changes the solution.
 
-## 10. Record canonical Evidence
+## 2. Build and verify
 
-Use `.harness/governance.yaml`, `.state.yaml`, and `.harness/policies/skill-evidence.yaml` to determine the union of gates required by risk and resolved verification Skills.
-
-Record only required canonical gates using:
-
-```bash
-npm run evidence -- <TASK_ID> --gate check
-npm run evidence -- <TASK_ID> --gate typecheck
-npm run evidence -- <TASK_ID> --gate test
-```
-
-Run only the gates required by the union; do not claim a gate ran unless Evidence records it.
-
-Then verify both dimensions:
+Implement the smallest root fix. Maintain the task's required spec, task, test and
+changelog artifacts. Complete P2 markers and selected Skill outputs:
 
 ```bash
-npm run evidence -- <TASK_ID> --verify
-node .harness/scripts/skill-evidence.ts <TASK_ID> --verify
+node .harness/scripts/verification-plan.ts <TASK_ID>
+node .harness/scripts/skill-output.ts <TASK_ID> --verify
 ```
 
-If repository/task content changes afterward, regenerate any stale Context/Evidence rather than bypassing freshness.
-
-## 11. Review and delivery boundary
-
-Follow risk policy in `.harness/governance.yaml` / `AGENTS.md`.
-
-When Builder self-review is required:
+Before final verification, prepare Builder review state:
 
 ```bash
 node .harness/scripts/self-review.ts <TASK_ID> --prepare
 ```
 
-The second prepare is idempotent: it refreshes the packet to the final post-Evidence repository snapshot without mutating task state. Answer every packet question in `self-review.json`, copy the packet's exact repository snapshot, and then verify:
+After governed implementation/task content stabilizes, regenerate and verify
+Context. Then record only the union of risk- and Skill-required gates:
 
 ```bash
+node .harness/scripts/context-select.ts <TASK_ID> --generate
+node .harness/scripts/context-select.ts <TASK_ID> --verify
+npm run evidence -- <TASK_ID> --gate check
+npm run evidence -- <TASK_ID> --gate typecheck
+npm run evidence -- <TASK_ID> --gate test
+npm run evidence -- <TASK_ID> --verify
+node .harness/scripts/skill-evidence.ts <TASK_ID> --verify
+```
+
+Do not run gates the policy does not require. If governed content changes, use
+Runtime status to identify what became stale; regenerate and verify Context and
+Evidence instead of rereading the entire lifecycle.
+
+## 3. Builder self-review
+
+Refresh the packet against the final post-Evidence repository snapshot:
+
+```bash
+node .harness/scripts/self-review.ts <TASK_ID> --prepare
 node .harness/scripts/self-review.ts <TASK_ID> --verify
 ```
 
-`self-review.json` is a semantic review output excluded from machine Evidence freshness, but its own snapshot becomes stale after any governed repository change.
+The Builder writes `self-review.json` and answers every packet question. Review
+packet/record outputs do not stale machine Evidence, but governed source/task
+changes do stale the review.
 
-For L2/L3, prepare Independent Review:
+## 4. Independent review boundary
+
+Prepare the packet, then ask Runtime whether dispatch is legal:
 
 ```bash
 node .harness/scripts/independent-review.ts <TASK_ID> --prepare
+node .harness/scripts/task-status.ts <TASK_ID> --review-ready --json
 ```
 
-The current Builder context must not create an independent PASS. Stop and report that a fresh Codex context or human reviewer must supply the independent review artifact. L3 requires the reviewer kind permitted by current risk policy.
+Dispatch a fresh Codex context or human only when that command exits zero and
+returns `review_ready: true`.
 
-After a genuinely independent review exists, the delivery gate is:
+Role contract:
+
+- Builder owns product code, task artifacts, Context, Evidence and
+  `self-review.json`.
+- Reviewer may write only `independent-review.json`.
+- Reviewer must not modify product code, refresh Context/Evidence, rewrite Builder
+  review artifacts or run a mutating delivery command.
+- A stale/missing prerequisite is returned to the Builder. The reviewer must not
+  repair it.
+- The Builder context must not create an independent PASS. L3 requires a human.
+
+After the separate reviewer records a result, verify and deliver:
 
 ```bash
+node .harness/scripts/independent-review.ts <TASK_ID> --verify
 node .harness/scripts/delivery-gate.ts <TASK_ID>
 ```
 
-For tasks whose risk policy does not require independent review, run the delivery gate directly after all prior gates are fresh.
+On REJECT, record feedback, add an appropriate regression first when feasible,
+repair as Builder, refresh Builder-owned artifacts, prepare a new packet and run
+the review-readiness preflight again.
 
-## 12. Completion report
+## 5. Compact status and reporting
 
-Report only concrete state:
+At any continuation boundary run:
 
-- task ID and branch
-- implementation summary
-- Classification and selected/resolved Skills
-- machine gates actually recorded
-- delivery gate result, or the exact Independent Review boundary still pending
+```bash
+node .harness/scripts/task-status.ts <TASK_ID> --json
+```
 
-Never report `PASS` for a gate that was not executed and recorded.
+Follow `next_action` and inspect only failed artifacts. Do not repeatedly dump all
+PASS output or the Engine implementation. Report task/branch, classification,
+risk/strategy, selected Skills, actual verification, and the exact remaining
+boundary.

@@ -56,6 +56,12 @@ test('external L2 consumer passes the complete P3 delivery chain without embedde
     assert.equal(init.status, 0, init.stderr || init.stdout);
     const taskDir = path.join(projectRoot, 'docs/wip', taskId);
 
+    const initialStatus = run(projectRoot, 'task-status.ts', [taskId, '--json']);
+    assert.equal(initialStatus.status, 0, initialStatus.stderr || initialStatus.stdout);
+    assert.equal(JSON.parse(initialStatus.stdout).review_ready, false);
+    assert.equal(JSON.parse(initialStatus.stdout).next_action, 'author-or-fix-classification');
+    assert.deepEqual(JSON.parse(initialStatus.stdout).failures, ['classification']);
+
     fs.writeFileSync(path.join(taskDir, 'classification.yaml'), stringifyYaml({
       version: '1.0',
       task_id: taskId,
@@ -156,8 +162,16 @@ test('external L2 consumer passes the complete P3 delivery chain without embedde
     const selfReview = run(projectRoot, 'self-review.ts', [taskId, '--verify']);
     assert.equal(selfReview.status, 0, selfReview.stderr || selfReview.stdout);
 
+    const beforeReview = run(projectRoot, 'task-status.ts', [taskId, '--review-ready', '--json']);
+    assert.equal(beforeReview.status, 2, beforeReview.stderr || beforeReview.stdout);
+    assert.equal(JSON.parse(beforeReview.stdout).next_action, 'prepare-independent-review');
+
     const prepare = run(projectRoot, 'independent-review.ts', [taskId, '--prepare']);
     assert.equal(prepare.status, 0, prepare.stderr || prepare.stdout);
+    const ready = run(projectRoot, 'task-status.ts', [taskId, '--review-ready', '--json']);
+    assert.equal(ready.status, 0, ready.stderr || ready.stdout);
+    assert.equal(JSON.parse(ready.stdout).review_ready, true);
+    assert.equal(JSON.parse(ready.stdout).next_action, 'run-independent-review');
     const packet = fs.readFileSync(path.join(taskDir, 'review-packet.md'), 'utf8');
     const snapshot = packetSnapshot(packet);
     fs.writeFileSync(path.join(taskDir, 'independent-review.json'), `${JSON.stringify({
@@ -171,6 +185,10 @@ test('external L2 consumer passes the complete P3 delivery chain without embedde
       findings: [],
       notes: 'fresh external review fixture',
     }, null, 2)}\n`);
+
+    const reviewed = run(projectRoot, 'task-status.ts', [taskId, '--json']);
+    assert.equal(reviewed.status, 0, reviewed.stderr || reviewed.stdout);
+    assert.equal(JSON.parse(reviewed.stdout).next_action, 'run-delivery-gate');
 
     const delivery = run(projectRoot, 'delivery-gate.ts', [taskId]);
     assert.equal(delivery.status, 0, delivery.stderr || delivery.stdout);

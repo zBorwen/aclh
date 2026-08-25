@@ -35,7 +35,7 @@ test('external capability manifest keeps every published command supported acros
   for (const [command, state] of Object.entries(manifest.external_mode.commands)) {
     assert.equal(state, 'supported', `${command} must remain supported once published`);
   }
-  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence', 'self-review', 'independent-review', 'delivery-gate']) {
+  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence', 'self-review', 'independent-review', 'task-contract', 'task-status', 'delivery-gate']) {
     assert.equal(manifest.external_mode.commands[command], 'supported');
   }
 });

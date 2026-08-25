@@ -1,0 +1,134 @@
+{
+  "version": "2.0",
+  "task_id": "TASK-TOKEN-EFFICIENT-ORCHESTRATION",
+  "mode": "skill-aware",
+  "generated_at": "2026-08-25T10:03:25.216Z",
+  "basis": {
+    "base_commit": "a5a980b8ae563b163d2d85b1d2be07304f3b9a12",
+    "sha256": "e896ad447c93c4440f97153e327cf2e6b6f19533fda39c5f999a43f23145f41e",
+    "changed_files": [
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/.state.yaml",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/changelog.md",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/spec.md",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/tasks.md",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/test-plan.md"
+    ],
+    "change_content_sha256": "aba4c42a7851f9fe4820f80f4ce06f7bf6c4d138624a08709bab7661803ab209",
+    "skill_plan_sha256": "a8003b8eee6f971b2d0fb111372003597ef896f6f6dddd6922309d78c21ba029",
+    "context_contract_sha256": "397d8d2c5f66f9d94939babe85453cbc101c209c9b07b42ee5e970c95db80d59",
+    "retrieval_policy_sha256": "83073c8d9a2f3d8dbdb0fba63f37172b7dec5fcfbddaf8ee582916510e605cc9",
+    "explicit_scope": {
+      "modules": [],
+      "tags": [],
+      "files": []
+    }
+  },
+  "skills": [
+    "change-impact-analysis",
+    "compatibility-verification",
+    "regression-verification",
+    "root-cause-analysis"
+  ],
+  "requirements": {
+    "architecture": {
+      "level": "required",
+      "required_by": [
+        "change-impact-analysis",
+        "compatibility-verification"
+      ],
+      "optional_by": [
+        "root-cause-analysis"
+      ],
+      "resolver": "project-file",
+      "source": "architecture.yaml"
+    },
+    "bug-ledger": {
+      "level": "required",
+      "required_by": [
+        "root-cause-analysis"
+      ],
+      "optional_by": [
+        "change-impact-analysis",
+        "regression-verification"
+      ],
+      "resolver": "knowledge",
+      "source": "bug-ledger.yaml"
+    },
+    "changed-files": {
+      "level": "required",
+      "required_by": [
+        "change-impact-analysis",
+        "regression-verification",
+        "root-cause-analysis"
+      ],
+      "optional_by": [
+        "compatibility-verification"
+      ],
+      "resolver": "changed-files"
+    },
+    "decisions": {
+      "level": "required",
+      "required_by": [
+        "compatibility-verification"
+      ],
+      "optional_by": [
+        "change-impact-analysis"
+      ],
+      "resolver": "knowledge",
+      "source": "decisions.yaml"
+    },
+    "gotchas": {
+      "level": "optional",
+      "required_by": [],
+      "optional_by": [
+        "compatibility-verification",
+        "regression-verification",
+        "root-cause-analysis"
+      ],
+      "resolver": "knowledge",
+      "source": "gotchas.yaml"
+    }
+  },
+  "retrieval": {
+    "max_items_per_source": 5,
+    "scoring": {
+      "minimum_scope_matches": 1,
+      "module_match": 5,
+      "file_match": 4,
+      "tag_match": 3,
+      "high_severity_bonus": 2
+    },
+    "selected_knowledge_items": 0,
+    "total_knowledge_matches": 0
+  },
+  "selected": {
+    "architecture": {
+      "source": ".harness/project/architecture.yaml",
+      "modules": []
+    },
+    "bug-ledger": {
+      "source": ".harness/project/bug-ledger.yaml",
+      "items": [],
+      "total_matches": 0
+    },
+    "changed-files": {
+      "files": [
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/.state.yaml",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/changelog.md",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/spec.md",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/tasks.md",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/test-plan.md"
+      ]
+    },
+    "decisions": {
+      "source": ".harness/project/decisions.yaml",
+      "items": [],
+      "total_matches": 0
+    },
+    "gotchas": {
+      "source": ".harness/project/gotchas.yaml",
+      "items": [],
+      "total_matches": 0
+    }
+  }
+}
