@@ -1,23 +1,10 @@
-# Builder Self-Review Packet — TASK-CODEX-ADAPTER-SELF-REVIEW
+# Independent Review Packet — TASK-CODEX-ADAPTER-SELF-REVIEW
 
 Repository snapshot:
 - commit: a9ddca8777a5ca906095e2b39fa3e26e5075d5fc
-- worktree: 5f93c413a545ab435cefb980343bf405b31c17ffe2147cc1a1b6685db4efaa6c
+- worktree: 0d0f7eb50b62e52d73cb4cd3a0bdf5e8a5f864635a776dd9c188282affa07bbe
 
-Answer every hostile question after canonical machine Evidence has completed. Record the result in self-review.json with version=1.0, this task_id, this exact repository snapshot, run_at, gaps_found, root_fix_tracked, notes, and answers Q1-Q10. Then run self-review.ts TASK-CODEX-ADAPTER-SELF-REVIEW --verify.
-
-## Hostile Questions
-
-- Q1  What did I miss? What did I overlook? (boundary cases, error paths, empty/null inputs, state transitions, concurrency)
-- Q2  Which of my assumptions could be wrong? Would a stricter reviewer reject them first?
-- Q3  Which acceptance criterion or constraint from the spec did I NOT re-verify?
-- Q4  Which callers / dependents / consumers of this change went untested?
-- Q5  Did I patch a symptom instead of the root cause? Is the root-fix direction tracked as the end state (AGENTS.md B2/B3)?
-- Q6  Which of my tests could pass for the wrong reason?
-- Q7  Which state transition in .state.yaml is unhandled (phase/status/review_history)?
-- Q8  What did I leave undocumented or unexplained in changelog.md?
-- Q9  Is the diff minimal, or did I drag in unrelated changes for convenience?
-- Q10 Did I run the machine gates (check.ts + lint + tests) and confirm they are green?
+Review this task in a FRESH Codex context or use a human reviewer. Do not reuse the builder conversation. Challenge correctness, acceptance criteria, regressions, root-cause quality, and test adequacy. Record the result in independent-review.json with a reviewer session id distinct from the builder session id, verdict=PASS|REJECT, findings as an array, and this exact repository snapshot.
 
 ## spec.md
 

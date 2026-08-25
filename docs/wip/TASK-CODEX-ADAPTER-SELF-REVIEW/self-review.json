@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "task_id": "TASK-CODEX-ADAPTER-SELF-REVIEW",
+  "repository": {
+    "commit_sha": "a9ddca8777a5ca906095e2b39fa3e26e5075d5fc",
+    "worktree_sha256": "5f93c413a545ab435cefb980343bf405b31c17ffe2147cc1a1b6685db4efaa6c"
+  },
+  "run_at": "2026-08-24T04:23:22Z",
+  "gaps_found": [
+    "Existing tasks that only contain the legacy inline self_review block need to run --prepare and create self-review.json; no automatic semantic migration is attempted.",
+    "The real issue-management consumer has no canonical test:browser or human browser coverage, so its own delivery remains correctly blocked at that separate verification boundary.",
+    "This L2 Engine task still requires an independent fresh-context review before Delivery can pass."
+  ],
+  "root_fix_tracked": "Model Builder self-review as a Runtime-prepared, snapshot-bound semantic artifact that is verified after canonical Evidence without mutating the Evidence repository fingerprint.",
+  "notes": "Reviewed Runtime ordering, Evidence and Context freshness exclusions, external-consumer behavior, legacy verification compatibility, task templates and canonical test reliability. Delivery Gate exposed one embedded Context exclusion omission; it was fixed with a regression test before this final review. Remaining gaps are explicit migration, consumer browser-proof and independent-review boundaries.",
+  "answers": {
+    "Q1": "Checked malformed task IDs, invalid phase/status, missing or malformed review records, incomplete answers, repeated prepare, stale source changes, embedded Context freshness and concurrent repository tests. Automatic migration of legacy inline records is intentionally not implemented and is recorded as a gap.",
+    "Q2": "The main assumption is that review packet and record files are semantic outputs rather than governed implementation inputs. This is constrained to task-local named files and tested by proving that source changes still stale both Evidence and review.",
+    "Q3": "Re-verified all seven acceptance criteria through targeted embedded/external tests, the complete 103-test canonical suite, Context verification, Delivery Gate progression and the real issue-management consumer exercise.",
+    "Q4": "Embedded and external Adapter callers, Delivery Gate, Resync and no-mode CLI callers were tested. A legacy task with only inline review data was assessed as requiring explicit re-prepare rather than being silently accepted; the issue-management consumer stopped at its independent browser-proof gap.",
+    "Q5": "The root cause was the absence of a valid state transition and snapshot binding, not a missing field check. The implementation adds Runtime-owned prepare/verify stages and repository freshness rather than relaxing validation.",
+    "Q6": "Synthetic external fixtures could pass without exposing real consumer Context or browser boundaries. Running the new Runtime against agent/issue-management caught its placeholder project Context and missing canonical browser proof, reducing that risk.",
+    "Q7": "Active requirements/design/task/implement tasks transition to testing; active testing and delivery prepares are idempotent; paused/blocked and invalid states fail. Independent review remains responsible for the later delivery transition/history.",
+    "Q8": "The changelog records the Runtime fix, Adapter/docs/test updates, real consumer exercise and serial canonical-test correction. Legacy migration and consumer browser-proof limitations are documented in compatibility and self-review artifacts.",
+    "Q9": "The diff is limited to self-review orchestration, its freshness exclusions and dependents, task governance context, regression fixtures, and serializing repository-mutating tests. No unrelated product refactor was included.",
+    "Q10": "Canonical check, typecheck and serial test Evidence are fresh PASS; npm test completed 103/103. The initial parallel npm test failure was reproduced, explained as shared-snapshot races, and corrected in the canonical script before final Evidence."
+  }
+}

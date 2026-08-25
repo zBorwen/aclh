@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "task_id": "TASK-CODEX-ADAPTER-SELF-REVIEW",
+  "builder": {
+    "session_id": "builder-session"
+  },
+  "reviewer": {
+    "kind": "codex-fresh-context",
+    "session_id": "independent-review-2026-08-25"
+  },
+  "repository": {
+    "commit_sha": "a9ddca8777a5ca906095e2b39fa3e26e5075d5fc",
+    "worktree_sha256": "0d0f7eb50b62e52d73cb4cd3a0bdf5e8a5f864635a776dd9c188282affa07bbe"
+  },
+  "reviewed_at": "2026-08-25T00:00:00Z",
+  "verdict": "PASS",
+  "findings": [],
+  "notes": "Fresh independent review found no correctness, regression, root-cause, acceptance-criteria, or test-adequacy findings. Current task identity, Classification, Skill Plan, Context, verification plan, Skill outputs, canonical Evidence, and Builder self-review verify successfully. Independent reruns: npm run check PASS, npm run typecheck PASS, npm test PASS (103/103)."
+}
