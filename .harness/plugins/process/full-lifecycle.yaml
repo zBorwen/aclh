@@ -22,7 +22,7 @@ workflow:
       entry: spec approved # 进入条件：需求规格已批准
       constraints:
         - figma/design reference linked # 约束条件：必须关联 Figma 或设计参考链接
-      exit: component breakdown done # 退出条件：完成组件拆解
+      exit: plan.md completed # 退出条件：完成技术方案 (plan.md)
 
     - name: task
       description: 任务拆解阶段 (Task Breakdown Phase)
@@ -47,8 +47,9 @@ workflow:
       constraints:
         - coverage >= threshold # 测试覆盖率必须达标
         - edge cases covered # 必须覆盖边界情况
-        - adversarial self-review passed before human review # 人工审查前必须通过对抗式自检 (node .harness/scripts/self-review.ts)
-      exit: all tests green, human review passed # 退出条件：测试全绿，通过人工审查
+        - independent review is read-only # 独立审查只报告问题，不修改 Builder 产物
+        - repair requires explicit user decision # Repair 必须由用户明确选择
+      exit: all tests green, independent review reported to user # 退出条件：测试全绿，独立审查结果已报告
 
     - name: delivery
       description: 交付阶段 (Delivery Phase)

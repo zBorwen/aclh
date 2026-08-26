@@ -37,6 +37,7 @@ const state = parseYaml(fs.readFileSync(statePath, 'utf8')) as {
   risk_level?: unknown;
   classification?: unknown;
   skill_plan?: unknown;
+  planning?: { contract?: unknown };
 };
 const governance = parseYaml(fs.readFileSync(path.join(roots.runtimeHarnessDir, 'governance.yaml'), 'utf8')) as {
   default_risk_level?: unknown;
@@ -100,7 +101,10 @@ const scope = run('context-scope', 'context-scope.ts', [taskId, '--verify'], sco
 const contextEnabled = contextRequired && bootstrapReady && (!external || (readiness && scope));
 const context = run('context', 'context-select.ts', [taskId, '--verify'], contextEnabled);
 const contextReady = !contextRequired || (contextEnabled && context);
-const verificationPlanEnabled = contextReady;
+const planningEnabled = contextReady;
+const planning = run('task-planning', 'task-planning.ts', [taskId, '--verify'], planningEnabled);
+const planningReady = planningEnabled && planning;
+const verificationPlanEnabled = planningReady;
 const verificationPlan = run('verification-plan', 'verification-plan.ts', [taskId], verificationPlanEnabled);
 const skillOutputEnabled = p3Task && contextReady;
 const skillOutput = run('skill-output', 'skill-output.ts', [taskId, '--verify'], skillOutputEnabled);
@@ -136,6 +140,7 @@ checks.push({
 });
 
 const reviewExists = fs.existsSync(paths.review);
+const repairAuthorizationExists = fs.existsSync(paths.repairAuthorization);
 const independentReview = run(
   'independent-review',
   'independent-review.ts',
@@ -144,18 +149,46 @@ const independentReview = run(
 );
 const reviewComplete = !reviewRequired || (reviewExists && independentReview);
 const reviewReady = reviewRequired && builderReady && packetFresh && !reviewExists;
+const decisionExists = fs.existsSync(paths.decision);
+const reviewDecisionValid = run(
+  'review-decision',
+  'review-decision.ts',
+  [taskId, '--verify'],
+  reviewRequired && reviewComplete && decisionExists,
+);
+let reviewDecision = 'none';
+if (reviewRequired && !reviewExists && repairAuthorizationExists) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(paths.repairAuthorization, 'utf8')) as { decision?: unknown; findings?: unknown };
+    if (parsed.decision === 'repair' && Array.isArray(parsed.findings) && parsed.findings.length > 0) reviewDecision = 'repair';
+    else reviewDecision = 'invalid';
+  } catch {
+    reviewDecision = 'invalid';
+  }
+}
+if (reviewRequired && reviewComplete && decisionExists && reviewDecisionValid) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(paths.decision, 'utf8')) as { decision?: unknown };
+    if (parsed.decision === 'accept' || parsed.decision === 'repair') reviewDecision = parsed.decision;
+  } catch {
+    reviewDecision = 'invalid';
+  }
+}
 
 let nextAction: string;
 if (check('task-identity')?.status === 'fail') nextAction = 'repair-task-identity';
+else if (reviewRequired && reviewDecision === 'repair') nextAction = 'repair-user-selected-findings';
 else if (p3Task && check('classification')?.status === 'fail') nextAction = 'author-or-fix-classification';
 else if (p3Task && check('skill-plan')?.status === 'fail') nextAction = 'author-or-fix-skill-plan';
-else if (!context) nextAction = 'generate-or-refresh-context';
-else if (!verificationPlan || !skillOutput) nextAction = 'complete-task-and-skill-artifacts';
-else if (!evidence || !skillEvidence || !gapVerify) nextAction = 'implement-and-record-evidence';
+else if (!contextReady) nextAction = 'generate-or-refresh-context';
+else if (!planningReady) nextAction = 'complete-spec-plan-tasks';
+else if (!preEvidenceReady) nextAction = 'complete-task-and-skill-artifacts';
+else if (!evidence || (p3Task && !skillEvidence) || (external && p3Task && !gapVerify)) nextAction = 'implement-and-record-evidence';
 else if (policy.builder_self_review === true && !selfReview) nextAction = 'complete-builder-self-review';
 else if (reviewRequired && !packetFresh) nextAction = 'prepare-independent-review';
 else if (reviewReady) nextAction = 'run-independent-review';
-else if (reviewRequired && !reviewComplete) nextAction = 'resolve-independent-review';
+else if (reviewRequired && !reviewComplete) nextAction = 'fix-independent-review-record';
+else if (reviewRequired && reviewDecision !== 'accept') nextAction = 'report-review-and-await-user';
 else nextAction = 'run-delivery-gate';
 
 const result = {
@@ -167,6 +200,7 @@ const result = {
   builder_ready: builderReady,
   review_ready: reviewReady,
   review_complete: reviewComplete,
+  review_decision: reviewDecision,
   next_action: nextAction,
   failures: checks.filter(item => item.status === 'fail').map(item => item.id),
   checks,

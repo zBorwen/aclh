@@ -12,11 +12,17 @@ export function independentReviewPaths(root: string, taskDir: string): {
   review: string;
   packet: string;
   evidence: string;
+  decision: string;
+  repairAuthorization: string;
+  history: string;
 } {
   return {
     review: path.join(taskDir, 'independent-review.json'),
     packet: path.join(taskDir, 'review-packet.md'),
     evidence: path.join(taskDir, 'evidence.json'),
+    decision: path.join(taskDir, 'review-decision.json'),
+    repairAuthorization: path.join(taskDir, 'repair-authorization.json'),
+    history: path.join(taskDir, 'review-history.json'),
   };
 }
 

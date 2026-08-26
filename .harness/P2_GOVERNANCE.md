@@ -7,9 +7,9 @@ P2 makes governance proportional to risk and keeps task context bounded as the r
 | Risk | Machine gates | Context | Builder self-review | Independent review |
 |---|---|---|---|---|
 | L0 | check | optional | no | no |
-| L1 | check + typecheck + test | required/fresh | yes | no |
-| L2 | check + typecheck + test | required/fresh | yes | fresh Codex or human |
-| L3 | check + typecheck + test | required/fresh | yes | human only |
+| L1 | check + typecheck + test | required/fresh | optional | fresh Codex or human |
+| L2 | check + typecheck + test | required/fresh | optional | fresh Codex or human |
+| L3 | check + typecheck + test | required/fresh | optional | human only |
 
 Default risk is L2. A task must not be downgraded merely to bypass a gate.
 
@@ -66,15 +66,21 @@ Recommended metadata:
 
 ## Delivery order
 
+After implementation stabilizes, `builder-finalize.ts <TASK_ID> --json` is the
+preferred bounded Builder transition. It refreshes Context and records only the
+policy/Skill/Verification-Gap requirements. Browser proof is explicit opt-in, not
+a default post-task check.
+
 `delivery-gate.ts` is the policy-aware entry point:
 
 ```text
 task identity
   -> fresh selected context when required
+  -> authored spec.md -> plan.md -> tasks.md
   -> declared verification strategy
   -> risk-required machine evidence
-  -> builder self-review when required
   -> independent review when required
+  -> explicit user accept or Repair decision
 ```
 
 P2 intentionally does not add Semgrep, AST dependency enforcement, dashboards or semantic/vector retrieval. Those remain later-phase work.

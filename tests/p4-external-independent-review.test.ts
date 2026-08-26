@@ -66,7 +66,8 @@ test('L2 independent review binds to the consumer repository and becomes stale a
     assert.match(packet, /Artifact sources/);
     assert.match(packet, /docs\/wip\/TASK-EXTERNAL-INDEPENDENT-L2\/spec\.md/);
     assert.match(packet, /write only independent-review\.json/);
-    assert.match(packet, /must not modify product code, Context, Evidence, or Builder self-review/);
+    assert.match(packet, /must not modify product code, task planning, Context, Evidence, or other Builder artifacts/);
+    assert.match(packet, /never starts Repair/);
 
     writeReview(taskDir, taskId, snapshot, 'codex-fresh-context');
     const verify = run(projectRoot, 'independent-review.ts', [taskId, '--verify']);

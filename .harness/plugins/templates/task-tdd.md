@@ -1,37 +1,25 @@
-# 任务: [JIRA-XXXX] 任务标题
+# Tasks — [Task title]
 
-**任务 ID**: [JIRA-XXXX]
-**Spec 链接**: [链接到需求文档]
+Task: `[TASK-ID]`
+Spec: `spec.md`
+Plan: `plan.md`
 
-## 测试用例 (RED)
-> [!IMPORTANT]
-> 必须在实现代码前定义并编写测试用例。确保测试用例初始状态为失败 (RED)。
+## Implementation Tasks
 
-- [ ] [测试用例 1: 描述]
-- [ ] [测试用例 2: 描述]
-- [ ] [测试用例 3: 描述]
+<!-- REQUIRED: Add ordered, independently checkable implementation tasks. -->
 
-## 验收标准
-- [ ] 标准 1
-- [ ] 标准 2
+- [ ] Replace this placeholder with an implementation task.
 
-## 实现思路
-> [!NOTE]
-> 在完成上述测试用例定义后，再填写此部分。
+## Dependencies
 
-[详细的实现方案、架构调整、数据结构变更等]
+<!-- REQUIRED: Record ordering and cross-task dependencies. -->
 
-## 影响分析
-- **受影响模块**: [模块 A, 模块 B]
-- **受影响文件**: [文件 1, 文件 2]
-- **风险等级**: [低 | 中 | 高]
-- **回归风险**: [描述可能的回归风险]
+## Verification Tasks
 
-## 历史教训检查
-- [ ] 已查阅 `bug-ledger.yaml` 中的相关记录
-- [ ] 已查阅 `gotchas.yaml` 中的相关陷阱防范
+<!-- REQUIRED: Add checks that prove the acceptance criteria and risky boundaries. -->
 
-## 人工审核记录
-| 轮次 | 审核结果 | 反馈意见 | 新增测试 |
-|---|---|---|---|
-| 1 | | | |
+- [ ] Replace this placeholder with a verification task.
+
+## Acceptance Mapping
+
+<!-- REQUIRED: Map implementation/verification tasks back to spec acceptance criteria. -->

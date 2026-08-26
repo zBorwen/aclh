@@ -89,6 +89,7 @@ fs.mkdirSync(taskDir, { recursive: true });
 const createdFiles: string[] = [];
 const templates: TemplateRef[] = [
   { src: 'spec.md', dest: 'spec.md' },
+  { src: 'plan.md', dest: 'plan.md' },
   { src: 'task-tdd.md', dest: 'tasks.md' },
 ];
 for (const t of templates) {

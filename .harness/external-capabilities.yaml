@@ -1,6 +1,6 @@
 version: "1.0"
 external_mode:
-  status: browser-verification-ready
+  status: user-controlled-review-ready
   commands:
     init-task: supported
     classification: supported
@@ -14,6 +14,7 @@ external_mode:
     skill-output: supported
     verification-gaps: supported
     browser-verification: supported
+    builder-finalize: supported
     evidence: supported
     skill-evidence: supported
     self-review: supported
@@ -24,3 +25,5 @@ external_mode:
     skill-replan: supported
     task-contract: supported
     task-status: supported
+    task-planning: supported
+    review-decision: supported

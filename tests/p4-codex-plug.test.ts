@@ -35,7 +35,7 @@ test('external capability manifest keeps every published command supported acros
   for (const [command, state] of Object.entries(manifest.external_mode.commands)) {
     assert.equal(state, 'supported', `${command} must remain supported once published`);
   }
-  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence', 'self-review', 'independent-review', 'task-contract', 'task-status', 'delivery-gate']) {
+  for (const command of ['init-task', 'classification', 'skill-plan', 'context-select', 'task-identity', 'task-planning', 'verification-plan', 'skill-output', 'evidence', 'skill-evidence', 'self-review', 'independent-review', 'review-decision', 'task-contract', 'task-status', 'builder-finalize', 'delivery-gate']) {
     assert.equal(manifest.external_mode.commands[command], 'supported');
   }
 });
@@ -57,8 +57,11 @@ test('Codex integration attaches as a thin full-lifecycle Skill and detaches wit
     assert.match(skill, /thin consumer integration/);
     assert.match(skill, /task-contract\.ts/);
     assert.match(skill, /task-status\.ts/);
+    assert.match(skill, /spec\.md -> plan\.md -> tasks\.md/);
     assert.match(lifecycle, /delivery-gate\.ts/);
     assert.match(lifecycle, /task-status\.ts.*--review-ready.*--json/s);
+    assert.match(lifecycle, /report implementation, tests, verdict, and findings.*Stop/s);
+    assert.match(lifecycle, /review-decision\.ts.*--repair/s);
     assert.ok(skill.length + lifecycle.length < 11_000, 'external Adapter contract must remain bounded');
     assert.equal(fs.existsSync(path.join(projectRoot, '.harness')), false, 'Runtime implementation must stay outside the consumer repo');
 

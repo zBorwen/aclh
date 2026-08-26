@@ -2,18 +2,77 @@
   "version": "2.0",
   "task_id": "TASK-TOKEN-EFFICIENT-ORCHESTRATION",
   "mode": "skill-aware",
-  "generated_at": "2026-08-25T10:03:25.216Z",
+  "generated_at": "2026-08-26T06:45:55.879Z",
   "basis": {
     "base_commit": "a5a980b8ae563b163d2d85b1d2be07304f3b9a12",
-    "sha256": "e896ad447c93c4440f97153e327cf2e6b6f19533fda39c5f999a43f23145f41e",
+    "sha256": "3d076170ad87f9d85e6b3f90dbf101f7c562b4b9d00ca4e0e4f079f3a5c85f56",
     "changed_files": [
+      ".agents/skills/aclh-task/SKILL.md",
+      ".agents/skills/aclh-task/references/lifecycle.md",
+      ".harness/EVIDENCE.md",
+      ".harness/P2_GOVERNANCE.md",
+      ".harness/SKILLS.md",
+      ".harness/external-capabilities.yaml",
+      ".harness/governance.yaml",
+      ".harness/integrations/codex/aclh-task/SKILL.md",
+      ".harness/integrations/codex/aclh-task/references/lifecycle.md",
+      ".harness/plugins/process/full-lifecycle.yaml",
+      ".harness/plugins/templates/plan.md",
+      ".harness/plugins/templates/spec.md",
+      ".harness/plugins/templates/task-tdd.md",
+      ".harness/scripts/builder-finalize.ts",
+      ".harness/scripts/delivery-gate.ts",
+      ".harness/scripts/independent-review.ts",
+      ".harness/scripts/init-task.ts",
+      ".harness/scripts/lib/evidence-runtime.ts",
+      ".harness/scripts/lib/independent-review-runtime.ts",
+      ".harness/scripts/lib/managed-snapshot-runtime.ts",
+      ".harness/scripts/review-decision.ts",
+      ".harness/scripts/self-review.ts",
+      ".harness/scripts/task-contract.ts",
+      ".harness/scripts/task-planning.ts",
+      ".harness/scripts/task-status.ts",
+      "AGENTS.md",
+      "README.md",
+      "docs/architecture/README.md",
+      "docs/wip/.state-template.yaml",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/.state.yaml",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/change-impact-analysis.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/changelog.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/classification.yaml",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/compatibility-verification.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/evidence.json",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/independent-review.json",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/regression-verification.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/review-packet.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/root-cause-analysis.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/self-review-packet.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/self-review.json",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/spec.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/tasks.md",
+      "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/test-plan.md",
       "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/.state.yaml",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/change-impact-analysis.md",
       "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/changelog.md",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/compatibility-verification.md",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/plan.md",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/regression-verification.md",
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/root-cause-analysis.md",
       "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/spec.md",
       "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/tasks.md",
-      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/test-plan.md"
+      "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/test-plan.md",
+      "tests/codex-adapter.test.ts",
+      "tests/p3-delivery.test.ts",
+      "tests/p4-codex-plug.test.ts",
+      "tests/p4-external-delivery.test.ts",
+      "tests/p4-external-independent-review.test.ts",
+      "tests/p4-external-self-review.test.ts",
+      "tests/p4-managed-delivery-checkpoint.test.ts",
+      "tests/review-decision.test.ts",
+      "tests/task-contract.test.ts",
+      "tests/task-planning.test.ts"
     ],
-    "change_content_sha256": "aba4c42a7851f9fe4820f80f4ce06f7bf6c4d138624a08709bab7661803ab209",
+    "change_content_sha256": "cc9c3a58f2e3e24a038dcdf57b6165f62fdb18af0b12aedf192e7d0c11b46574",
     "skill_plan_sha256": "a8003b8eee6f971b2d0fb111372003597ef896f6f6dddd6922309d78c21ba029",
     "context_contract_sha256": "397d8d2c5f66f9d94939babe85453cbc101c209c9b07b42ee5e970c95db80d59",
     "retrieval_policy_sha256": "83073c8d9a2f3d8dbdb0fba63f37172b7dec5fcfbddaf8ee582916510e605cc9",
@@ -98,26 +157,159 @@
       "tag_match": 3,
       "high_severity_bonus": 2
     },
-    "selected_knowledge_items": 0,
-    "total_knowledge_matches": 0
+    "selected_knowledge_items": 1,
+    "total_knowledge_matches": 1
   },
   "selected": {
     "architecture": {
       "source": ".harness/project/architecture.yaml",
-      "modules": []
+      "modules": [
+        {
+          "name": "Governance Runtime",
+          "path": ".harness/scripts",
+          "responsibility": "Own task state transitions, Context, Evidence, review, and delivery validation.",
+          "depends_on": []
+        },
+        {
+          "name": "Codex Adapter",
+          "path": ".agents/skills/aclh-task",
+          "responsibility": "Orchestrate the repository-owned ACLH lifecycle for explicit Codex invocation.",
+          "depends_on": [
+            "Governance Runtime"
+          ]
+        },
+        {
+          "name": "External Codex Integration",
+          "path": ".harness/integrations/codex",
+          "responsibility": "Provide the thin Codex integration copied into an external consumer repository.",
+          "depends_on": [
+            "Governance Runtime"
+          ]
+        },
+        {
+          "name": "Runtime Verification",
+          "path": "tests",
+          "responsibility": "Verify embedded and external ACLH lifecycle contracts and trust boundaries.",
+          "depends_on": [
+            "Governance Runtime",
+            "Codex Adapter",
+            "External Codex Integration"
+          ]
+        }
+      ]
     },
     "bug-ledger": {
       "source": ".harness/project/bug-ledger.yaml",
-      "items": [],
-      "total_matches": 0
+      "items": [
+        {
+          "score": 11,
+          "reasons": [
+            "module",
+            "file",
+            "severity"
+          ],
+          "entry": {
+            "id": "BUG-SELF-REVIEW-FRESHNESS",
+            "date": "2026-08-24",
+            "source": "human_review",
+            "task": "TASK-CODEX-ADAPTER-SELF-REVIEW",
+            "module": "Governance Runtime",
+            "modules": [
+              "Governance Runtime",
+              "Codex Adapter",
+              "External Codex Integration"
+            ],
+            "tags": [
+              "self-review",
+              "evidence-freshness",
+              "external-consumer"
+            ],
+            "severity": "high",
+            "symptom": "L1-L3 Adapter tasks could not populate self-review without staling Evidence, and old inline reviews were reusable after repository changes.",
+            "root_cause": "Builder self-review was mutable inline task state without a Runtime transition or repository snapshot binding.",
+            "resolution": "Prepare task phase before final verification and verify a separate snapshot-bound self-review.json after Evidence.",
+            "prevention_rule": "Semantic review outputs must have explicit freshness binding and must not mutate the machine-Evidence subject after gates run.",
+            "affected_files": [
+              ".harness/scripts/self-review.ts",
+              ".harness/scripts/lib/evidence-runtime.ts",
+              ".harness/scripts/delivery-gate.ts",
+              ".agents/skills/aclh-task/references/lifecycle.md",
+              ".harness/integrations/codex/aclh-task/references/lifecycle.md"
+            ],
+            "test_added": "External self-review snapshot freshness and complete L2 delivery regression",
+            "lesson": "Review structure is not review freshness; bind semantic review to the governed repository snapshot.",
+            "review_round": 1
+          }
+        }
+      ],
+      "total_matches": 1
     },
     "changed-files": {
       "files": [
+        ".agents/skills/aclh-task/SKILL.md",
+        ".agents/skills/aclh-task/references/lifecycle.md",
+        ".harness/EVIDENCE.md",
+        ".harness/P2_GOVERNANCE.md",
+        ".harness/SKILLS.md",
+        ".harness/external-capabilities.yaml",
+        ".harness/governance.yaml",
+        ".harness/integrations/codex/aclh-task/SKILL.md",
+        ".harness/integrations/codex/aclh-task/references/lifecycle.md",
+        ".harness/plugins/process/full-lifecycle.yaml",
+        ".harness/plugins/templates/plan.md",
+        ".harness/plugins/templates/spec.md",
+        ".harness/plugins/templates/task-tdd.md",
+        ".harness/scripts/builder-finalize.ts",
+        ".harness/scripts/delivery-gate.ts",
+        ".harness/scripts/independent-review.ts",
+        ".harness/scripts/init-task.ts",
+        ".harness/scripts/lib/evidence-runtime.ts",
+        ".harness/scripts/lib/independent-review-runtime.ts",
+        ".harness/scripts/lib/managed-snapshot-runtime.ts",
+        ".harness/scripts/review-decision.ts",
+        ".harness/scripts/self-review.ts",
+        ".harness/scripts/task-contract.ts",
+        ".harness/scripts/task-planning.ts",
+        ".harness/scripts/task-status.ts",
+        "AGENTS.md",
+        "README.md",
+        "docs/architecture/README.md",
+        "docs/wip/.state-template.yaml",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/.state.yaml",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/change-impact-analysis.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/changelog.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/classification.yaml",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/compatibility-verification.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/evidence.json",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/independent-review.json",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/regression-verification.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/review-packet.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/root-cause-analysis.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/self-review-packet.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/self-review.json",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/spec.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/tasks.md",
+        "docs/wip/TASK-CODEX-ADAPTER-SELF-REVIEW/test-plan.md",
         "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/.state.yaml",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/change-impact-analysis.md",
         "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/changelog.md",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/compatibility-verification.md",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/plan.md",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/regression-verification.md",
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/root-cause-analysis.md",
         "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/spec.md",
         "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/tasks.md",
-        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/test-plan.md"
+        "docs/wip/TASK-TOKEN-EFFICIENT-ORCHESTRATION/test-plan.md",
+        "tests/codex-adapter.test.ts",
+        "tests/p3-delivery.test.ts",
+        "tests/p4-codex-plug.test.ts",
+        "tests/p4-external-delivery.test.ts",
+        "tests/p4-external-independent-review.test.ts",
+        "tests/p4-external-self-review.test.ts",
+        "tests/p4-managed-delivery-checkpoint.test.ts",
+        "tests/review-decision.test.ts",
+        "tests/task-contract.test.ts",
+        "tests/task-planning.test.ts"
       ]
     },
     "decisions": {

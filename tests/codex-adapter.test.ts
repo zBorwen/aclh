@@ -28,11 +28,12 @@ test('Codex adapter uses the repository-local aclh-task Skill contract', () => {
   assert.ok((frontmatter.description as string).includes('ACLH'));
   assert.match(content, /thin Codex adapter/i);
   assert.match(content, /must not mechanically map to a fixed Skill set/i);
-  assert.match(content, /Never create a same-session independent PASS/i);
+  assert.match(content, /fresh independent reviewer/i);
+  assert.match(content, /After Review, report findings and stop/i);
   assert.match(content, /references\/lifecycle\.md/);
   assert.match(content, /task-status\.ts/);
   assert.match(content, /task-contract\.ts/);
-  assert.match(content, /do not inspect Runtime source/i);
+  assert.match(content, /do not rediscover them from Runtime[\s\S]*README files/i);
 });
 
 test('Codex adapter requires explicit invocation', () => {
@@ -58,14 +59,12 @@ test('Codex adapter lifecycle delegates every trusted transition to ACLH Runtime
     'skill-plan.ts <TASK_ID> --verify',
     'context-select.ts <TASK_ID> --generate',
     'context-select.ts <TASK_ID> --verify',
-    'verification-plan.ts <TASK_ID>',
-    'skill-output.ts <TASK_ID> --verify',
-    'npm run evidence -- <TASK_ID> --verify',
-    'skill-evidence.ts <TASK_ID> --verify',
-    'self-review.ts <TASK_ID> --prepare',
-    'self-review.ts <TASK_ID> --verify',
+    'builder-finalize.ts <TASK_ID> --json',
+    'task-planning.ts <TASK_ID> --verify',
     'independent-review.ts <TASK_ID> --prepare',
     'task-status.ts <TASK_ID> --review-ready --json',
+    'review-decision.ts <TASK_ID> --accept',
+    'review-decision.ts <TASK_ID> --repair',
     'delivery-gate.ts <TASK_ID>',
   ];
 
@@ -74,9 +73,10 @@ test('Codex adapter lifecycle delegates every trusted transition to ACLH Runtime
   }
 
   assert.match(lifecycle, /Do not write `resolved` manually/);
-  assert.match(lifecycle, /must not create an independent PASS/i);
-  assert.match(lifecycle, /regenerate and verify Context/i);
-  assert.match(lifecycle, /self-review\.json/);
-  assert.match(lifecycle, /post-Evidence repository snapshot/i);
-  assert.match(lifecycle, /Reviewer may write only `independent-review\.json`/i);
+  assert.match(lifecycle, /Report the result and stop/i);
+  assert.match(lifecycle, /Builder self-review is available but not a default delivery gate/i);
+  assert.match(lifecycle, /writes\s+only `independent-review\.json`/i);
+  assert.match(lifecycle, /Never infer acceptance or repair scope/i);
+  assert.match(lifecycle, /Browser verification is opt-in/i);
+  assert.doesNotMatch(lifecycle, /browser-verification\.ts[^\n]*--run/);
 });

@@ -15,8 +15,9 @@
 1. Read `.harness/harness.yaml`, `.harness/governance.yaml`, and `.harness/SKILLS.md` first.
 2. Every formal task has explicit `risk_level`, P2 `verification_strategy`, Git identity, and `context_scope` in `docs/wip/<TASK_ID>/.state.yaml`.
 3. P3 tasks additionally use task-local `classification.yaml` and `skill-plan.yaml`.
-4. P3 v1 Skill selection is explicit. Do not infer or auto-create a Skill Plan from Classification.
-5. `preset` remains the single plugin composition source.
+4. New tasks refine the request through authored `spec.md`, `plan.md`, and `tasks.md` before implementation; verify with `task-planning.ts`.
+5. P3 v1 Skill selection is explicit. Do not infer or auto-create a Skill Plan from Classification.
+6. `preset` remains the single plugin composition source.
 
 ### A2. P3 task intelligence and Skills
 For a P3 task:
@@ -75,9 +76,9 @@ Do not eagerly load all project knowledge when the Skill Plan requests a narrowe
 | Risk | Intended use | Delivery requirements |
 |---|---|---|
 | `L0` | trivial/mechanical change | `check` risk Evidence only; no required self/independent review |
-| `L1` | low-risk local code change | check/typecheck/test + builder self-review |
-| `L2` | normal business development (default) | L1 + independent fresh-context Codex or human review |
-| `L3` | high-risk/cross-boundary change | L2 + independent **human** review |
+| `L1` | low-risk local code change | check/typecheck/test + independent fresh-context Codex or human review |
+| `L2` | normal business development (default) | L1 machine gates + independent fresh-context Codex or human review |
+| `L3` | high-risk/cross-boundary change | L2 machine gates + independent **human** review |
 
 For P3 tasks, Skill-specific verification may require additional canonical Evidence gates even when the risk level itself does not. Example: an L0 task selecting `regression-verification` still needs fresh `test` Evidence.
 
@@ -127,10 +128,20 @@ npm run evidence -- <TASK_ID> --verify
 node .harness/scripts/skill-evidence.ts <TASK_ID> --verify
 ```
 
+For normal Builder completion, prefer the bounded policy-aware wrapper:
+
+```bash
+node .harness/scripts/builder-finalize.ts <TASK_ID> --json
+```
+
+It refreshes required Context and records only required gates. Browser verification
+is opt-in and runs only when `verification-gaps.yaml` explicitly declares
+`machine_proofs: [browser]`; do not add browser proof for ordinary small tasks.
+
 A repository change invalidates old Evidence. Verification Skills map through `.harness/policies/skill-evidence.yaml` to the existing P1 canonical Evidence gates; they do not create a second PASS system. GitHub Actions independently reruns canonical repository gates and emits CI provenance evidence.
 
 ### A9. Builder self-review
-Required for L1-L3, not L0:
+Builder self-review remains available as an optional adversarial checklist:
 
 ```bash
 node .harness/scripts/self-review.ts <TASK_ID> --prepare
@@ -138,11 +149,11 @@ node .harness/scripts/self-review.ts <TASK_ID> --prepare
 node .harness/scripts/self-review.ts <TASK_ID> --verify
 ```
 
-Prepare transitions the active task before final Context/Evidence. The verified `self-review.json` is snapshot-bound hostile Builder review, not independent review evidence.
+It is not an independent trust signal and is not a default Delivery prerequisite.
 
 ### A10. Independent review
-- L0/L1: not required by risk policy.
-- L2: fresh Codex context or human reviewer.
+- L0: not required by risk policy.
+- L1/L2: fresh Codex context or human reviewer.
 - L3: human reviewer only.
 
 ```bash
@@ -151,6 +162,13 @@ node .harness/scripts/independent-review.ts <TASK_ID> --verify
 ```
 
 The Builder conversation must not manufacture a fresh-context PASS and present it as independent.
+
+Independent Review reports `READY`, `READY_WITH_FINDINGS`, or `NOT_READY` and classifies findings as defects, risks, edge cases, optimizations, or questions. Review is read-only and never authorizes Repair. After Review, report findings and wait for the user's explicit `accept` or selected `repair` decision:
+
+```bash
+node .harness/scripts/review-decision.ts <TASK_ID> --accept
+node .harness/scripts/review-decision.ts <TASK_ID> --repair <FINDING_ID>...
+```
 
 ### A11. Delivery gate
 Use the single policy-aware gate:
@@ -166,20 +184,22 @@ task identity
   -> Classification
   -> Skill Plan
   -> Skill-aware Context
+  -> authored spec.md -> plan.md -> tasks.md
   -> P2 verification-strategy compatibility markers
   -> Skill outputs
   -> risk-required machine Evidence
   -> verification-Skill Evidence
-  -> Builder self-review when required
   -> Independent Review when required
+  -> explicit user accept or Repair decision
 ```
 
 Legacy tasks without `skill-plan.yaml` continue through the P2 compatibility workflow.
 
 ### A12. Human feedback loop
-- PASS → delivery may proceed.
-- REJECT → record feedback and add the verification artifact appropriate to the task before fixing it.
-- For TDD, reproduce behavioral feedback with a failing regression test when feasible.
+- Review complete → report verdict/findings and stop for user inspection.
+- User accepts → record `review-decision --accept`; Delivery may proceed.
+- User requests Repair → record only selected findings; then repair as Builder.
+- For TDD Repair, reproduce behavioral feedback with a failing regression test when feasible.
 - Persist reusable lessons into structured project knowledge.
 
 ## Part B — Coding cognitive model
@@ -196,11 +216,11 @@ Work in this order:
 2. Describe the task with Classification when using P3.
 3. Select/resolve the explicit Skill Plan.
 4. Resolve only Context required by the Skill graph.
-5. Understand system state and design the minimal safe solution.
-6. Implement as the Builder.
+5. Author and verify `spec.md`, `plan.md`, and `tasks.md`.
+6. Understand system state and implement the minimal safe solution as Builder.
 7. Complete declared understanding/verification Skill artifacts.
 8. Produce risk- and Skill-required machine Evidence.
-9. Run the risk-required review gates.
+9. Run independent Review, report its findings, and wait for an explicit user decision.
 
 ### B3. Change philosophy
 Prefer root fix over symptom patch, minimal diff over broad refactor, clarity over abstraction, explicit data flow over hidden magic, and stability over cleverness.

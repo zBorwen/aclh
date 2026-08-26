@@ -5,6 +5,8 @@ classification:
   file: "classification.yaml"
 skill_plan:
   file: "skill-plan.yaml"
+planning:
+  contract: "spec-plan-tasks-v1"
 identity:
   branch: "agent/token-efficient-orchestration"
   base_commit: "a5a980b8ae563b163d2d85b1d2be07304f3b9a12"

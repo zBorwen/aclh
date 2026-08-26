@@ -5,6 +5,8 @@ classification:
   file: "classification.yaml"
 skill_plan:
   file: "skill-plan.yaml"
+planning:
+  contract: "spec-plan-tasks-v1"
 identity:
   branch: "{{BRANCH}}"
   base_commit: "{{BASE_COMMIT}}"
