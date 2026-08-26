@@ -27,6 +27,7 @@ export function managedSnapshotExclusions(root: string, taskDir: string): string
     'evidence.json',
     'review-packet.md',
     'independent-review.json',
+    'review-decision.json',
   ].map(name => normalizeRepoPath(path.relative(root, path.join(taskDir, name))));
 }
 

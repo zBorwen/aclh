@@ -63,6 +63,11 @@ test('L2 independent review binds to the consumer repository and becomes stale a
     const snapshot = packetSnapshot(packet);
     assert.equal(snapshot.commit_sha, git(projectRoot, ['rev-parse', 'HEAD']));
     assert.match(packet, /FRESH Codex context or use a human reviewer/);
+    assert.match(packet, /Artifact sources/);
+    assert.match(packet, /docs\/wip\/TASK-EXTERNAL-INDEPENDENT-L2\/spec\.md/);
+    assert.match(packet, /write only independent-review\.json/);
+    assert.match(packet, /must not modify product code, task planning, Context, Evidence, or other Builder artifacts/);
+    assert.match(packet, /never starts Repair/);
 
     writeReview(taskDir, taskId, snapshot, 'codex-fresh-context');
     const verify = run(projectRoot, 'independent-review.ts', [taskId, '--verify']);

@@ -1,0 +1,17 @@
+version: "1.0"
+task_id: TASK-TOKEN-EFFICIENT-ORCHESTRATION
+classification:
+  primary: refactor
+  traits:
+    - behavior-change
+    - cross-module
+    - compatibility-sensitive
+    - performance-sensitive
+  confidence: high
+  rationale:
+    - "The task restructures Codex Adapter orchestration and Runtime status reporting while preserving existing governance and trust boundaries."
+    - "PL-01 measured 14,519,949 ACLH tokens versus 1,523,992 baseline tokens, including an avoidable 3,255,910-token protocol-violation review."
+    - "The change spans external Adapter instructions, Runtime lifecycle/status commands, review readiness and experiment reporting."
+  ambiguities:
+    - "The three-times-baseline Token target requires a fresh paired replay and cannot be proven by repository unit tests alone."
+  source: codex

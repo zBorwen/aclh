@@ -1,24 +1,39 @@
 ---
 name: aclh-task
-description: Use an attached external ACLH Engine to understand, classify, implement, verify, review, and deliver a repository engineering task. Invoke explicitly with $aclh-task.
+description: Use an attached external ACLH Engine to refine, implement, verify, independently review, and deliver a repository engineering task. Invoke explicitly with $aclh-task.
 ---
 
 # ACLH External Task Adapter
 
-This is a thin consumer integration. It contains orchestration instructions only; ACLH Runtime implementation remains outside the consumer repository.
+This is a thin consumer integration. ACLH Runtime implementation remains outside
+the consumer repository.
 
 ## Resolve the Engine
 
 1. Treat the current Git repository root as `PROJECT_ROOT`.
-2. Resolve `ACLH_RUNTIME_ROOT` from the environment. If it is missing, stop and report that the ACLH Engine is not attached for this shell/session.
-3. Read `$ACLH_RUNTIME_ROOT/.harness/external-capabilities.yaml` before invoking Runtime.
-4. Read `references/lifecycle.md` and follow it in order.
-5. Never copy Engine scripts, Skill contracts, policies, registries, or templates into the consumer repository.
+2. Resolve `ACLH_RUNTIME_ROOT` from the environment. If missing, stop and report
+   that ACLH is not attached for this shell/session.
+3. Follow consumer `AGENTS.md` when present. Never substitute Engine `AGENTS.md`.
+4. Read `$ACLH_RUNTIME_ROOT/.harness/external-capabilities.yaml` and load bounded
+   choices and exact artifact shapes with `task-contract.ts --json`. Do not inspect
+   Runtime source, tests, or README files for normal orchestration.
+5. Read `references/lifecycle.md` once, then continue through
+   `task-status.ts <TASK_ID> --json`.
+6. Never copy Engine scripts, policies, contracts, registries, or templates into
+   the consumer repository.
 
-## Runtime ownership
+## Trust and user-decision boundaries
 
-For Runtime transitions, call Engine-owned scripts with `ACLH_PROJECT_ROOT="$PROJECT_ROOT"`. Runtime contracts/policies come from `ACLH_RUNTIME_ROOT`; consumer Git state, project Context, task artifacts, Evidence, and review artifacts belong to `PROJECT_ROOT`.
+Runtime commands execute with `ACLH_PROJECT_ROOT="$PROJECT_ROOT"`. The Runtime owns
+policy and transitions; the consumer owns product code, task artifacts, Evidence,
+Review, and explicit user decisions.
 
-If any required command is marked `pending` in the capability manifest, stop at that exact boundary rather than silently falling back to embedded Runtime behavior.
+- The Builder must author `spec.md -> plan.md -> tasks.md` before implementation.
+- Builder self-review is optional and never substitutes for independent Review.
+- A fresh reviewer may write only `independent-review.json` and never repairs code.
+- Review findings may be defects, risks, edge cases, optimizations, or questions.
+- After Review, report the result and stop. Never infer approval for Repair.
+- Run `review-decision.ts --repair` or `--accept` only after explicit user direction.
 
-Classification describes the overall Task. Explicit Engineering Skill selection remains separate from Classification. Builder self-review never substitutes for a required independent review, and the Builder must not manufacture an independent PASS.
+Before reviewer dispatch, require `task-status.ts <TASK_ID> --review-ready --json`
+to exit zero with `review_ready: true`.

@@ -12,24 +12,24 @@ risk_levels:
     independent_review: none
   L1:
     name: low-risk
-    description: "局部低风险代码变更；完整机器验证 + builder self-review"
+    description: "局部低风险代码变更；完整机器验证 + 独立 review"
     required_gates: [check, typecheck, test]
     context_required: true
-    builder_self_review: true
-    independent_review: none
+    builder_self_review: false
+    independent_review: codex-or-human
   L2:
     name: normal
-    description: "默认业务开发；完整机器验证 + builder self-review + 独立 review"
+    description: "默认业务开发；完整机器验证 + 独立 review + 用户决定是否 Repair"
     required_gates: [check, typecheck, test]
     context_required: true
-    builder_self_review: true
+    builder_self_review: false
     independent_review: codex-or-human
   L3:
     name: high-risk
-    description: "高风险/跨边界变更；完整门禁 + 人工独立 review"
+    description: "高风险/跨边界变更；完整门禁 + 人工独立 review + 用户决定是否 Repair"
     required_gates: [check, typecheck, test]
     context_required: true
-    builder_self_review: true
+    builder_self_review: false
     independent_review: human
 
 default_risk_level: L2

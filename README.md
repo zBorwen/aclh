@@ -7,7 +7,7 @@
 ## 当前核心能力
 
 - **P0 Enforcement**：advisory / verifiable / blocking + 最小确定性 blocking 规则。
-- **P1 Trust Layer**：repository-bound Evidence、CI provenance、Builder self-review、Independent Review。
+- **P1 Trust Layer**：repository-bound Evidence、CI provenance、只读 Independent Review、显式用户决策。
 - **P2 Governance Scaling**：Risk、Task identity、task-dependent verification、bounded Context/Knowledge retrieval。
 - **P3 Engineering Skills**：Classification、Skill Contract、dependency resolution、Explicit Skill Plan、Skill-aware Context、Skill Output、Skill→Evidence、统一 Delivery Gate。
 
@@ -31,6 +31,7 @@ Task
   -> Explicit Skill Plan
   -> Dependency-resolved Skills
   -> Skill-aware Context
+  -> Spec -> Plan -> Tasks
   -> Builder
   -> Skill Outputs
   -> Risk Evidence + Skill Evidence
@@ -56,6 +57,10 @@ Execution Skills 暂不进入 P3 v1，真正实现仍由 Builder 负责。
 
 ## P3 task workflow
 
+先运行 `task-contract.ts --json` 获取 Classification、Skill Plan、Verification
+Gaps 与 Skill outputs 的完整可写格式；正常编排不需要再阅读 Runtime README、
+测试或源码来猜格式。
+
 ```bash
 # 1. 初始化 task（P2 risk/identity 仍保留）
 node .harness/scripts/init-task.ts TASK-123 --risk L2 --strategy tdd
@@ -70,22 +75,22 @@ node .harness/scripts/skill-plan.ts TASK-123 --verify
 # 4. Skill Contract 决定 Context requirements
 node .harness/scripts/context-select.ts TASK-123 --generate
 
-# 5. 完成 Skill outputs 与 P2 verification compatibility markers
-node .harness/scripts/skill-output.ts TASK-123 --verify
-node .harness/scripts/verification-plan.ts TASK-123
+# 5. 完成详细 spec.md、plan.md、tasks.md，再验证规划边界
+node .harness/scripts/task-planning.ts TASK-123 --verify
 
-# 6. 在 task/context/Skill artifacts 最终稳定后记录 canonical Evidence
-npm run evidence -- TASK-123 --gate check
-npm run evidence -- TASK-123 --gate typecheck
-npm run evidence -- TASK-123 --gate test
+# 6. 实现与 Skill outputs 稳定后，一次完成 Context/Evidence/Builder 收尾
+node .harness/scripts/builder-finalize.ts TASK-123 --json
 
-# 7. Risk 与 Verification Skill 分别验证同一份 P1 Evidence
-npm run evidence -- TASK-123 --verify
-node .harness/scripts/skill-evidence.ts TASK-123 --verify
-
-# 8. 单一交付入口
+# 9. 独立 Review 后先报告给用户；用户接受后再交付
+node .harness/scripts/independent-review.ts TASK-123 --prepare
+node .harness/scripts/independent-review.ts TASK-123 --verify
+node .harness/scripts/review-decision.ts TASK-123 --accept
 node .harness/scripts/delivery-gate.ts TASK-123
 ```
+
+浏览器验证不是默认后置步骤。只有 `verification-gaps.yaml` 因需求或验收标准
+显式声明 `machine_proofs: [browser]` 时，Builder finalizer 才会运行它；普通小
+任务不需要 `test:browser`。
 
 ## Classification
 
@@ -150,9 +155,9 @@ compatibility-verification
 | Risk | Risk-level delivery depth |
 |---|---|
 | `L0` | `check` Evidence；无强制 self/independent review |
-| `L1` | check/typecheck/test + Builder self-review |
-| `L2` | L1 + fresh-context Codex 或 human Independent Review |
-| `L3` | L2 + human-only Independent Review |
+| `L1` | check/typecheck/test + fresh-context Codex 或 human Independent Review |
+| `L2` | check/typecheck/test + fresh-context Codex 或 human Independent Review |
+| `L3` | check/typecheck/test + human-only Independent Review |
 
 P3 Skill requirements 与 Risk 正交：Skill 决定需要什么工程能力，Risk 决定治理深度。
 
@@ -162,7 +167,8 @@ P2 `verification_strategy` 在 P3 v1 **暂不废弃**。当前五个 Skill 尚�
 
 - Local Evidence 是 repository-local evidence，不是防篡改 attestation。
 - CI Evidence 由 GitHub Actions 独立重跑 canonical gates 并记录 provenance。
-- Builder self-review 不等于 Independent Review。
+- Builder self-review 是可选清单，不是默认交付门禁，也不等于 Independent Review。
+- Independent Review 只报告 findings；Repair 必须由用户明确选择。
 - Fresh-context Codex isolation 目前是协议级声明，不是密码学证明。
 - Skill output 不等于 Verification PASS；Verification Skill 必须依赖 fresh P1 machine Evidence。
 - AI 自动 Skill recommendation / Classification→Skill fixed mapping 都不属于 P3 v1。

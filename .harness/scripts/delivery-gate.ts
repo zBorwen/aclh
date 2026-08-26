@@ -70,6 +70,7 @@ if (hasSkillPlan) {
   }
   if (EXTERNAL_MODE) run('context-readiness.ts', [taskId, '--verify']);
   verifyContextBoundary();
+  run('task-planning.ts', [taskId, '--verify']);
   run('verification-plan.ts', [taskId]);
   run('skill-output.ts', [taskId, '--verify']);
   if (EXTERNAL_MODE) run('verification-gaps.ts', [taskId, '--check']);
@@ -82,6 +83,7 @@ if (hasSkillPlan) {
   } else {
     console.log(`[Delivery] ${taskId}: fresh task context not required by risk ${risk}`);
   }
+  run('task-planning.ts', [taskId, '--verify']);
   run('verification-plan.ts', [taskId]);
   run('evidence.ts', [taskId, '--verify']);
 }
@@ -94,6 +96,7 @@ if (policy.builder_self_review === true) {
 
 if (policy.independent_review === 'codex-or-human' || policy.independent_review === 'human') {
   run('independent-review.ts', [taskId, '--verify']);
+  run('review-decision.ts', [taskId, '--require-accept']);
 } else if (policy.independent_review === 'none') {
   console.log(`[Delivery] ${taskId}: independent review not required by risk ${risk}`);
 } else {

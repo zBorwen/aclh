@@ -1,0 +1,46 @@
+{
+  "version": "1.1",
+  "task_id": "TASK-TOKEN-EFFICIENT-ORCHESTRATION",
+  "updated_at": "2026-08-26T06:47:16.089Z",
+  "gates": {
+    "check": {
+      "gate": "check",
+      "command": "npm run check",
+      "started_at": "2026-08-26T06:45:56.021Z",
+      "finished_at": "2026-08-26T06:45:56.314Z",
+      "exit_code": 0,
+      "result": "PASS",
+      "repository": {
+        "commit_sha": "8cee0e294fda747eed21f5e99484a82a1885a062",
+        "worktree_sha256": "6d865aa76f239d001caa920709e67ba0bc8458a13934a8b0588d839f1417e3c5"
+      },
+      "repository_unchanged": true
+    },
+    "typecheck": {
+      "gate": "typecheck",
+      "command": "npm run typecheck",
+      "started_at": "2026-08-26T06:45:56.472Z",
+      "finished_at": "2026-08-26T06:45:56.789Z",
+      "exit_code": 0,
+      "result": "PASS",
+      "repository": {
+        "commit_sha": "8cee0e294fda747eed21f5e99484a82a1885a062",
+        "worktree_sha256": "6d865aa76f239d001caa920709e67ba0bc8458a13934a8b0588d839f1417e3c5"
+      },
+      "repository_unchanged": true
+    },
+    "test": {
+      "gate": "test",
+      "command": "npm test",
+      "started_at": "2026-08-26T06:45:56.951Z",
+      "finished_at": "2026-08-26T06:47:16.089Z",
+      "exit_code": 0,
+      "result": "PASS",
+      "repository": {
+        "commit_sha": "8cee0e294fda747eed21f5e99484a82a1885a062",
+        "worktree_sha256": "6d865aa76f239d001caa920709e67ba0bc8458a13934a8b0588d839f1417e3c5"
+      },
+      "repository_unchanged": true
+    }
+  }
+}

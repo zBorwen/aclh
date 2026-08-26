@@ -17,10 +17,39 @@ function run(args: string[], env?: NodeJS.ProcessEnv) {
 }
 function taskDir(taskId: string) { return path.join('docs/wip', taskId); }
 function cleanup(taskId: string) { fs.rmSync(taskDir(taskId), { recursive: true, force: true }); }
+function writePlanning(taskId: string) {
+  const dir = taskDir(taskId);
+  fs.writeFileSync(path.join(dir, 'spec.md'), [
+    '# Specification', '',
+    '## Problem', 'The delivery fixture must exercise deterministic lifecycle governance.', '',
+    '## User Scenarios', 'A task can reach Delivery only after required artifacts and checks pass.', '',
+    '## Functional Requirements', '- Delivery validates the configured lifecycle contracts.', '',
+    '## Acceptance Criteria', '- [x] The expected gate outcome is machine verified.', '',
+    '## Edge Cases', '- Missing or stale artifacts stop at their exact boundary.', '',
+    '## Out of Scope', '- Product behavior outside this isolated lifecycle fixture.', '',
+  ].join('\n'));
+  fs.writeFileSync(path.join(dir, 'plan.md'), [
+    '# Plan', '',
+    '## Technical Context', 'The fixture invokes Engine scripts against a task-local repository state.', '',
+    '## Architecture', 'Task artifacts feed Context, Evidence, and Delivery validators.', '',
+    '## Data Model and Contracts', 'The task uses repository-owned YAML, Markdown, and JSON records.', '',
+    '## Implementation Strategy', 'Prepare only the artifacts required for each focused assertion.', '',
+    '## Verification Strategy', 'Assert the exact first failing or successful lifecycle boundary.', '',
+    '## Risks and Mitigations', 'Fresh snapshots prevent fixtures from reusing stale verification.', '',
+  ].join('\n'));
+  fs.writeFileSync(path.join(dir, 'tasks.md'), [
+    '# Tasks', '',
+    '## Implementation Tasks', '- [x] Prepare the focused delivery fixture artifacts.', '',
+    '## Dependencies', 'Planning precedes Context, Evidence, and Delivery.', '',
+    '## Verification Tasks', '- [x] Assert the intended delivery boundary.', '',
+    '## Acceptance Mapping', 'Each test maps to one delivery contract assertion.', '',
+  ].join('\n'));
+}
 function init(taskId: string) {
   cleanup(taskId);
   const result = run(['.harness/scripts/init-task.ts', taskId, '--risk', 'L0', '--strategy', 'docs']);
   assert.equal(result.status, 0, result.stderr || result.stdout);
+  writePlanning(taskId);
   const planPath = path.join(taskDir(taskId), 'test-plan.md');
   const plan = fs.readFileSync(planPath, 'utf8')
     .replaceAll('- [ ] DOC_STRUCTURE:', '- [x] DOC_STRUCTURE:')

@@ -1,6 +1,6 @@
-task_id: "{{TASK_ID}}"
-risk_level: "{{RISK_LEVEL}}" # L0 | L1 | L2 | L3
-verification_strategy: "{{VERIFICATION_STRATEGY}}" # P2 compatibility: tdd | component | config | migration | docs
+task_id: "TASK-TOKEN-EFFICIENT-ORCHESTRATION"
+risk_level: "L2" # L0 | L1 | L2 | L3
+verification_strategy: "tdd" # P2 compatibility: tdd | component | config | migration | docs
 classification:
   file: "classification.yaml"
 skill_plan:
@@ -8,15 +8,15 @@ skill_plan:
 planning:
   contract: "spec-plan-tasks-v1"
 identity:
-  branch: "{{BRANCH}}"
-  base_commit: "{{BASE_COMMIT}}"
+  branch: "agent/token-efficient-orchestration"
+  base_commit: "a5a980b8ae563b163d2d85b1d2be07304f3b9a12"
   pr_number: null
 context_scope:
   modules: []
   tags: []
   files: []
-created_at: "{{CREATED_AT}}"
-updated_at: "{{UPDATED_AT}}"
+created_at: "2026-08-25T10:02:29.371Z"
+updated_at: "2026-08-25T10:02:29.371Z"
 phase: "requirements" # requirements | design | task | implement | testing | delivery
 status: "active"      # active | paused | blocked
 review_history: []

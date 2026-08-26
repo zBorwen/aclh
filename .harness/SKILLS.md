@@ -11,6 +11,7 @@ Task
   -> Skill Contracts
   -> Context Requirements
   -> Context Runtime
+  -> Specification / Plan / Tasks
   -> Builder
   -> Skill Outputs
   -> Governance / Evidence / Review
@@ -81,7 +82,7 @@ Understanding and verification Skills produce task-local artifacts. `.harness/ar
 P0/P2 enforcement, risk, task identity and delivery depth. Risk is orthogonal to Skill selection: it determines how strictly the work is governed, not which engineering problem the task represents.
 
 ### Trust Runtime
-P1 machine Evidence, repository freshness, CI provenance, Builder self-review and Independent Review.
+P1 machine Evidence, repository freshness, CI provenance, Independent Review and an explicit user Review decision. Builder self-review remains optional and does not provide independent trust.
 
 Verification Skills map through `.harness/policies/skill-evidence.yaml` to existing canonical P1 gates (`check`, `typecheck`, `test`). They do not create a second Skill-level PASS format. A fresh Skill output without fresh required machine Evidence is not a trusted verification result.
 
@@ -132,12 +133,13 @@ task identity
   -> Classification
   -> resolved Skill Plan
   -> Skill-aware Context
+  -> authored spec.md -> plan.md -> tasks.md
   -> P2 verification-strategy compatibility markers
   -> Skill output contracts
   -> risk-required P1 Evidence
   -> verification-Skill P1 Evidence
-  -> Builder self-review when required by risk
   -> Independent Review when required by risk
+  -> explicit user accept or Repair decision
 ```
 
 Skill-required Context is an execution prerequisite for P3 tasks even at L0. Legacy P2 L0 tasks without `skill-plan.yaml` retain optional Context behavior.

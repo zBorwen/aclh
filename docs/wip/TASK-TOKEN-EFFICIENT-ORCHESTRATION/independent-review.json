@@ -1,0 +1,36 @@
+{
+  "version": "1.1",
+  "task_id": "TASK-TOKEN-EFFICIENT-ORCHESTRATION",
+  "builder": {
+    "session_id": "builder-session-task-token-efficient-orchestration"
+  },
+  "reviewer": {
+    "kind": "codex-fresh-context",
+    "session_id": "fresh-review-task-token-efficient-orchestration-20260826"
+  },
+  "repository": {
+    "commit_sha": "8cee0e294fda747eed21f5e99484a82a1885a062",
+    "worktree_sha256": "fe79b586b7fdc526686f920193570ebba185c1d582e70de2db943389624fcc27"
+  },
+  "reviewed_at": "2026-08-26T06:51:44Z",
+  "verdict": "READY_WITH_FINDINGS",
+  "findings": [
+    {
+      "id": "COMPAT-LEGACY-V1-REPAIR",
+      "category": "defect",
+      "severity": "major",
+      "summary": "Legacy v1.0 rejected reviews can verify successfully but cannot reliably enter the new Repair flow.",
+      "evidence": "The v1.0 verifier deliberately accepts any array as findings, preserving the old unconstrained schema, but review-decision.ts lines 121-132 extracts only finding.id values. A valid historical v1.0 REJECT whose findings are strings or objects without ids therefore produces an empty selection and makes --repair all fail; a null finding can also throw while reading finding.id. Existing tests exercise v1.0 PASS with an empty array and v1.1 typed findings, but not a v1.0 REJECT-to-Repair transition.",
+      "recommendation": "Normalize legacy v1.0 findings into stable synthetic IDs, or explicitly support all legacy finding shapes before selection, and add a v1.0 REJECT-to-Repair regression test that proceeds to a fresh review round."
+    },
+    {
+      "id": "TEST-FINALIZER-GATE-UNION",
+      "category": "risk",
+      "severity": "minor",
+      "summary": "Tests do not independently prove that Builder finalization unions risk, Skill, and Verification Gap gates.",
+      "evidence": "builder-finalize.ts lines 62-101 contains the intended three-source union, but the only end-to-end finalizer fixture is L2, whose risk policy already requires check, typecheck, and test. Its regression Skill and test gap both request test, so either union branch could be removed while that fixture still passes. Browser opt-in is separately covered, but selective canonical-gate execution is not.",
+      "recommendation": "Add focused external L0 finalizer fixtures that distinguish policy-only check, a verification Skill adding test, and a Verification Gap adding a different canonical gate; assert the returned step IDs and absence of unrequired gate execution."
+    }
+  ],
+  "notes": "Fresh-context read-only review inspected the task contract, Adapter lifecycle, Builder finalizer, Review/decision runtimes, snapshot exclusions, deleted historical task package, and focused tests. The contract is bounded and self-describing for normal bootstrap; browser execution is explicit opt-in; the v1.1 Repair path reaches a fresh second Review; deletion is recoverable from Git history and reusable self-review knowledge remains in the bug ledger. Focused runtime tests for contract/planning/review/browser/external delivery passed for the cases executed."
+}

@@ -5,7 +5,7 @@
 1. [`01-system-overview.excalidraw`](./01-system-overview.excalidraw) — 全局分层：P0 Enforcement、P1 Trust、P2 Governance、P3 Engineering Skills。
 2. [`02-task-to-delivery.excalidraw`](./02-task-to-delivery.excalidraw) — 单个 Task 从 bootstrap 到 Trusted Delivery 的完整执行链。
 3. [`03-skill-runtime.excalidraw`](./03-skill-runtime.excalidraw) — P3 内部：Classification、Skill Plan、Dependency Resolver、Context/Output/Evidence contracts。
-4. [`04-governance-trust.excalidraw`](./04-governance-trust.excalidraw) — Risk、machine verifier、Evidence freshness、CI provenance、Builder self-review 与 Independent Review。
+4. [`04-governance-trust.excalidraw`](./04-governance-trust.excalidraw) — Risk、machine verifier、Evidence freshness、CI provenance、Independent Review 与用户决策；图中旧 self-review 门禁以当前 executable contracts 为准。
 5. [`05-repository-structure.excalidraw`](./05-repository-structure.excalidraw) — 当前仓库 Contracts、Runtime、Project Knowledge、Task Workspace 的职责映射。
 
 ## 推荐阅读顺序

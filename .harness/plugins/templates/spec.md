@@ -1,31 +1,29 @@
-# 需求文档: [JIRA-XXXX]
+# Specification — [Task title]
 
-**任务 ID**: [JIRA-XXXX]
-**日期**: [YYYY-MM-DD]
-**作者**: [Author Name]
+Task: `[TASK-ID]`
 
-## 背景
-[描述需求的业务背景、痛点及目标]
+## Problem
 
-## 需求描述
-[详细描述需求功能点、用户故事等]
+<!-- REQUIRED: Explain the user problem, desired outcome, and why it matters. -->
 
-## 验收标准
-- [ ] 验收标准 1
-- [ ] 验收标准 2
-- [ ] 验收标准 3
+## User Scenarios
 
-## 设计参考
-[Figma 链接或其他 UI/UX 设计资源链接]
+<!-- REQUIRED: Describe concrete user journeys and observable behavior. -->
 
-## 技术约束
-[限制条件、依赖服务、特定框架要求等]
+## Functional Requirements
 
-## 影响范围
-[指出该需求可能会影响到的现有系统模块或功能]
+<!-- REQUIRED: List testable requirements using MUST/SHOULD language where useful. -->
 
-## 非功能需求
-- 性能要求:
-- 无障碍 (a11y):
-- 响应式设计:
-- 兼容性:
+## Acceptance Criteria
+
+<!-- REQUIRED: Add checkboxes that prove the requested outcome. -->
+
+- [ ] Replace this placeholder with a measurable acceptance criterion.
+
+## Edge Cases
+
+<!-- REQUIRED: Describe important empty, invalid, failure, and boundary states. -->
+
+## Out of Scope
+
+<!-- REQUIRED: State what this task intentionally will not implement. -->

@@ -154,12 +154,15 @@ function prepareSelfReview(taskId: string): void {
   }
 
   const snapshot = currentSnapshot(taskId);
-  const artifactSections = REQUIRED_FILES
+  const artifactSources = REQUIRED_FILES
     .filter(file => file !== '.state.yaml')
-    .map(file => `## ${file}\n\n${fs.existsSync(path.join(taskDir, file)) ? fs.readFileSync(path.join(taskDir, file), 'utf8') : '(missing)'}`)
-    .join('\n\n');
+    .map(file => {
+      const source = path.relative(ROOT, path.join(taskDir, file)).replaceAll('\\', '/');
+      return `- ${source}${fs.existsSync(path.join(taskDir, file)) ? '' : ' (missing)'}`;
+    })
+    .join('\n');
   const questionList = HOSTILE_QUESTIONS.map(question => `- ${question}`).join('\n');
-  const packet = `# Builder Self-Review Packet — ${taskId}\n\nRepository snapshot:\n- commit: ${snapshot.commit_sha}\n- worktree: ${snapshot.worktree_sha256}\n\nAnswer every hostile question after canonical machine Evidence has completed. Record the result in self-review.json with version=1.0, this task_id, this exact repository snapshot, run_at, gaps_found, root_fix_tracked, notes, and answers Q1-Q10. Then run self-review.ts ${taskId} --verify.\n\n## Hostile Questions\n\n${questionList}\n\n${artifactSections}\n`;
+  const packet = `# Builder Self-Review Packet — ${taskId}\n\nRepository snapshot:\n- commit: ${snapshot.commit_sha}\n- worktree: ${snapshot.worktree_sha256}\n\nAnswer every hostile question after canonical machine Evidence has completed. Record the result in self-review.json with version=1.0, this task_id, this exact repository snapshot, run_at, gaps_found, root_fix_tracked, notes, and answers Q1-Q10. Then run self-review.ts ${taskId} --verify.\n\n## Hostile Questions\n\n${questionList}\n\n## Artifact sources\n\nRead these source files directly; their bodies are not duplicated in this packet:\n\n${artifactSources}\n`;
   const packetPath = path.join(taskDir, 'self-review-packet.md');
   fs.writeFileSync(packetPath, packet);
   const action = transitioned ? `transitioned ${taskId} to phase ${targetPhase}` : `kept ${taskId} in phase ${targetPhase}`;
